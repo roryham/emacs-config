@@ -1,4 +1,41 @@
+#+AUTHOR: Rory Hamaoka
+#+DESCRIPTION: RH's emacs config
+#+STARTUP: showeverything
+#+OPTIONS: toc:t
+#TOC: headlines 3
 
+* Table of Contents :toc:
+- [[#important-programs-to-load-first][IMPORTANT PROGRAMS TO LOAD FIRST]]
+  - [[#adding-the-scripts-directory-to-path][Adding the scripts directory to path]]
+  - [[#sourcing-the-scripts][Sourcing the scripts]]
+- [[#all-the-icons][All the icons]]
+- [[#backup][Backup]]
+- [[#company][Company]]
+- [[#dashboard][Dashboard]]
+- [[#diminish][Diminish]]
+- [[#dired][Dired]]
+- [[#elfeed][Elfeed]]
+- [[#evil-mode][Evil Mode]]
+- [[#flycheck][Flycheck]]
+- [[#fonts][Fonts]]
+  - [[#setting-the-font-face][Setting the Font Face]]
+  - [[#zooming-inout][Zooming In/Out]]
+- [[#general-keybindings][General Keybindings]]
+- [[#git-programs][Git Programs]]
+  - [[#git-time-machine][Git Time Machine]]
+  - [[#magit][Magit]]
+- [[#ivycouncil][Ivy(Council)]]
+- [[#language-support][Language Support]]
+- [[#minibuffer-escape][Minibuffer Escape]]
+- [[#modeline][Modeline]]
+- [[#neotree][Neotree]]
+- [[#org-mode][Org Mode]]
+  - [[#diminish-org-indent-mod][Diminish Org Indent Mod]]
+  - [[#enable-table-of-contents][Enable Table Of Contents]]
+  - [[#enable-org-bullets][Enable Org Bullets]]
+  - [[#org-level-headers][Org Level Headers]]
+  - [[#source-code-block-tag-expansion][Source Code Block Tag Expansion]]
+- [[#projectile][Projectile]]
 - [[#rainbow-delimitors][RAINBOW DELIMITORS]]
 - [[#rainbow-mode][RAINBOW MODE]]
 - [[#sane-defaults][Sane Defaults]]
@@ -87,7 +124,10 @@ Emacs Dashboard is an extensible startup screen showing you recent files, bookma
   (dashboard-modify-heading-icons '((recents . "file-text")
 				      (bookmarks . "book")))
   :config
-  (dashboard-setup-startup-hook))
+  (dashboard-setup-startup-hook)
+  ;; Set a fefault projects folder for dashboard to find Projects
+  (setq projectile-project-search-path '("~/projects/"))
+  (setq projectile-switch-project-action #'projectile-dired))
 
 #+end_src
 

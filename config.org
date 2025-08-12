@@ -32,6 +32,7 @@
 - [[#neotree][Neotree]]
 - [[#org-mode][Org Mode]]
   - [[#diminish-org-indent-mod][Diminish Org Indent Mod]]
+  - [[#org-download][Org-download]]
   - [[#enable-table-of-contents][Enable Table Of Contents]]
   - [[#enable-org-bullets][Enable Org Bullets]]
   - [[#org-level-headers][Org Level Headers]]
@@ -681,6 +682,30 @@ e
 #+begin_src emacs-lisp
 (eval-after-load 'org-indent '(diminish 'org-indent-mode))
 #+end_src
+
+** Org-download
+org-download is an Emacs package that makes it super easy to save and insert images into Org-mode documents. For example, you can drag an image file into an Org buffer and it will save the image to a folder and insert the proper link automatically.
+
+| Common Command              | Action                                               |
+| M-x org-download-clipboard  | Paste an image from your clipboard into the org file |
+| M-x org-download-screenshot | Take a screenshot and insert it                      |                          
+
+#+begin_src emacs-lisp
+(elpaca org-download
+  ;; Optional: pin to a stable commit or branch, otherwise latest
+  ;; :ref "commit-sha-or-branch-name"
+  ;; Configuration after install
+  (with-eval-after-load 'org
+    (add-hook 'org-mode-hook #'org-download-enable)
+    (setq org-download-image-dir "./images"
+          org-download-screenshot-method "scrot -s %s"
+          org-download-link-format "[[file:%s]]")))
+
+#+end_src
+
+
+
+
 
 ** Enable Table Of Contents
 #+begin_src emacs-lisp

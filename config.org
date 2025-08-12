@@ -26,6 +26,7 @@
   - [[#magit][Magit]]
 - [[#ivycouncil][Ivy(Council)]]
 - [[#language-support][Language Support]]
+  - [[#pyenv][Pyenv]]
 - [[#minibuffer-escape][Minibuffer Escape]]
 - [[#modeline][Modeline]]
 - [[#neotree][Neotree]]
@@ -404,7 +405,7 @@ You can use the bindings CTRL plus =/- for zooming in/out.  You can also use CTR
        "f k" '((lambda () (interactive)
               (find-file "~/Documents/projects/cmd_emacs/emacs_notes.org")) 
               :wk "Open emacs RH knoweldge base emacs_notes.org")
- "f l" '(counsel-locate :wk "Locate a file")
+       "f l" '(counsel-locate :wk "Locate a file")
        "f r" '(counsel-recentf :wk "Find recent files")
        "f u" '(sudo-edit-find-file :wk "Sudo find file")
        "f U" '(sudo-edit :wk "Sudo edit file"))
@@ -492,6 +493,9 @@ You can use the bindings CTRL plus =/- for zooming in/out.  You can also use CTR
        "o F" '(select-frame-by-name :wk "Select frame by name"))
 
 
+   (dt/leader-keys
+       "p"   '(:ignore t :wk "Python")
+       "p v" '(pyvenv-activate :wk "Set python .venv"))
 
    (dt/leader-keys
        "s"   '(:ignore t :wk "Search")
@@ -614,6 +618,13 @@ Emacs has built-in programming language modes for Lisp, Scheme, DSSSL, Ada, ASM,
 
 #+end_src
 
+** Pyenv
+Emacs helper package to make Emacs aware of a virtual enviroment. Once Emacs knows about the venv, running the python interpreter is simple
+#+begin_src emacs-lisp
+(use-package pyvenv
+  :ensure t)
+
+#+end_src
 
 * Minibuffer Escape
 By default, Emacs requires you to hit ESC three times to escape quit the minibuffer.

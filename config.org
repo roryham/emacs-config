@@ -27,6 +27,7 @@
 - [[#ivycouncil][Ivy(Council)]]
 - [[#language-support][Language Support]]
   - [[#pyenv][Pyenv]]
+- [[#melpa][Melpa]]
 - [[#minibuffer-escape][Minibuffer Escape]]
 - [[#modeline][Modeline]]
 - [[#neotree][Neotree]]
@@ -50,6 +51,7 @@
 - [[#tldr][TL;DR]]
 - [[#transparency][Transparency]]
 - [[#which-key][WHICH-KEY]]
+- [[#custom-functions][Custom Functions]]
 
 * IMPORTANT PROGRAMS TO LOAD FIRST
 
@@ -95,7 +97,7 @@ Company is a text completion framework for Emacs. The name stands for “complet
   (company-minimum-prefix-length 2)
   (company-show-numbers t)
   (company-tooltip-align-annotations 't)
-  (global-company-mode t))
+  :hook (after-init . global-company-mode))
 
 (use-package company-box
   :after company
@@ -343,7 +345,7 @@ You can use the bindings CTRL plus =/- for zooming in/out.  You can also use CTR
    (general-create-definer dt/leader-keys
       :states '(normal visual emacs) ;; normal mode, insert mode, visual mode, emacs mode. Remove the state for insert mode or cannot place text
       :keymaps 'override
-      :prefix "SPC": ;; set leader
+      :prefix "SPC" ;; set leader
       :global-prefix "M-SPC") ;; access leader in insert mode
 
 
@@ -379,7 +381,10 @@ You can use the bindings CTRL plus =/- for zooming in/out.  You can also use CTR
        "d d" '(dired :wk "Open dired")
        "d j" '(dired-jump :wk "Dired jump to current")
        "d n" '(neotree-dir :wk "Open directory in neotree")
-       "d p" '(peep-dired :wk "Peep-dired"))
+       "d p" '(peep-dired :wk "Peep-dired")
+       "d U" '((lambda () (interactive)
+                (dired (concat "/sudo::" default-directory)))
+                :wk "Open current dired directory as Root" ))
 
    (dt/leader-keys
        "e"   '(:ignore t :wk "Eshell/Evaluate")    
@@ -619,6 +624,23 @@ Emacs has built-in programming language modes for Lisp, Scheme, DSSSL, Ada, ASM,
 
 #+end_src
 
+#+begin_src emacs-lisp
+;; Basic C Programming Setup
+
+;; Enable CC Mode for C programming
+(use-package cc-mode
+  :ensure t)  ;; Ensure cc-mode is installed
+
+;; Set up basic C mode settings
+(add-hook 'c-mode-hook
+          (lambda ()
+            (setq c-basic-offset 4)  ;; Indentation level
+            (setq tab-width 4)))      ;; Tab width
+
+#+end_src
+
+
+
 ** Pyenv
 Emacs helper package to make Emacs aware of a virtual enviroment. Once Emacs knows about the venv, running the python interpreter is simple
 #+begin_src emacs-lisp
@@ -626,6 +648,28 @@ Emacs helper package to make Emacs aware of a virtual enviroment. Once Emacs kno
   :ensure t)
 
 #+end_src
+
+* Melpa
+MELPA (Milkypostman’s Emacs Lisp Package Archive) is one of the main package repositories for Emacs. Think of it as an “app store” for Emacs Lisp packages. 
+#+begin_src 
+(require 'package)
+
+;; Add MELPA repository
+(add-to-list 'package-archives
+             '("melpa" . "https://melpa.org/packages/") t)
+
+;; Initialize package system
+(package-initialize)
+
+;; Always refresh package list to see latest packages like vterm
+(package-refresh-contents)
+
+#+end_src
+
+
+
+
+
 
 * Minibuffer Escape
 By default, Emacs requires you to hit ESC three times to escape quit the minibuffer.
@@ -711,6 +755,9 @@ org-download is an Emacs package that makes it super easy to save and insert ima
 #+begin_src emacs-lisp
 (use-package toc-org
     :ensure t
+    :config
+       (setq org-export-headline-levels 4
+             toc-org-max-depth 4)
     :hook (org-mode . toc-org-enable))
 #+end_src
 
@@ -778,9 +825,10 @@ Adding rainbow coloring to parentheses.
 * RAINBOW MODE
 Display the actual color as a background for any hex color value (ex. #ffffff).  The code block below enables rainbow-mode in all programming modes (prog-mode) as well as org-mode, which is why rainbow works in this document.
 #+begin_src emacs-lisp
-(use-package rainbow-mode
-  :diminish
-  :hook org-mode prog-mode)
+  (use-package rainbow-mode
+    :diminish
+    :hook ((org-mode . rainbow-mode)
+  	 (prog-mode . rainbow-mode)))
 #+end_src
 
 * Sane Defaults
@@ -834,7 +882,7 @@ In my configs, all of my shells (bash, fish, zsh and the ESHELL) require my shel
         eshell-hist-ignoredups t
         eshell-scroll-to-bottom-on-input t
         eshell-destroy-buffer-when-process-dies t
-        eshell-visual-commands'("bash" "fish" "htop" "ssh" "top" "zsh"))
+        eshell-visual-commands '("bash" "fish" "htop" "ssh" "top" "zsh"))
 
 #+end_src
 
@@ -844,17 +892,57 @@ Vterm is a terminal emulator within Emacs.  The ‘shell-file-name’ setting se
 (use-package vterm
   :ensure t
   :config
+  ;; -------------------------------
+  ;; Basic shell settings
+  ;; -------------------------------
   ;; Set default shell to zsh
   (setq shell-file-name "/bin/zsh")
-
   ;; Use zsh in vterm
   (setq vterm-shell "/bin/zsh")
-
   ;; Increase scrollback buffer
-  (setq vterm-max-scrollback 5000))
+  (setq vterm-max-scrollback 5000)
+  ;; Ensure terminal type is correct
+  (setq vterm-term-environment-variable "xterm-256color")
 
+  ;; -------------------------------
+  ;; Arrow keys & Evil mode fix
+  ;; -------------------------------
+  (add-hook 'vterm-mode-hook
+            (lambda ()
+              ;; Always enter insert state
+              (when (fboundp 'evil-insert-state)
+                (evil-insert-state))
+              ;; Let all keys pass to the terminal
+              (setq-local vterm-keymap-exceptions nil)
+              ;; Optional: improve scrolling in terminal
+              (setq-local term-scroll-show-maximum-output t)))
+
+  ;; -------------------------------
+  ;; History navigation (backup)
+  ;; -------------------------------
+  (define-key vterm-mode-map (kbd "M-p") #'vterm-send-up)
+  (define-key vterm-mode-map (kbd "M-n") #'vterm-send-down)
+
+  ;; -------------------------------
+  ;; Optional: sudo helper
+  ;; -------------------------------
+  (defun my/vterm-sudo ()
+    "Open a vterm buffer with sudo privileges."
+    (interactive)
+    (let ((vterm-buffer-name "*vterm-sudo*"))
+      (vterm)
+      (vterm-send-string "sudo -i")
+      (vterm-send-return)))
+
+  ;; -------------------------------
+  ;; Optional: copy/paste bindings
+  ;; -------------------------------
+  (with-eval-after-load 'vterm
+    (define-key vterm-mode-map (kbd "C-c C-c") #'vterm-copy-mode)
+    (define-key vterm-mode-map (kbd "C-c C-v") #'vterm-yank)))
 
 #+end_src
+
 
 ** Vterm-Toggle
 [[https://github.com/jixiuf/vterm-toggle][Vterm-toggle]] toggles between the vterm buffer and whatever buffer you are editing.
@@ -951,6 +1039,63 @@ With Emacs version 29, true transparency has been added.  I have turned transpar
 	  which-key-separator " → " ))
 
 #+end_src
+
+* Custom Functions
+#+begin_src emacs-lisp
+;; --- Custom functions ---
+(defun my/org-inline-paste ()
+  "Paste latest kill-ring inline in Org."
+  (interactive)
+  (insert (current-kill 0)))
+
+;; --- Evil + Org keybindings ---
+(with-eval-after-load 'evil
+  (evil-define-key 'normal org-mode-map
+    (kbd "p") #'my/org-inline-paste
+    (kbd "C-p") #'evil-paste-after))
+
+
+#+end_src
+
+#+begin_src emacs-lisp
+;;This function automatically makes shell scripts executable when you save them if they sart with #1/bin/bash
+;;Whenever a file is saved with #! (shebang), Emacs will automatically make it executable
+(defun my/make-shell-script-executable ()
+  "Make a shell script executable if it starts with a shebang."
+  (when (and buffer-file-name
+             ;; Ensure the file really starts with shebang
+             (save-excursion
+               (goto-char (point-min))
+               (looking-at-p "^#!"))
+             ;; Ensure the file ends with Unix line endings
+             (not (eq buffer-file-coding-system 'unix)))
+    (set-file-modes buffer-file-name #o755)
+    (message "✅ Made %s executable" buffer-file-name)))
+
+;; Add the hook after save
+(add-hook 'after-save-hook #'my/make-shell-script-executable)
+
+#+end_src
+
+#+begin_src emacs-lisp
+  ;; Make Evil stay in insert mode automatically in terminal buffers
+  (with-eval-after-load 'evil
+    (add-to-list 'evil-insert-state-modes 'vterm-mode)
+    (add-to-list 'evil-insert-state-modes 'term-mode))
+
+  (defun my/evil-insert-in-term ()
+    "Force insert mode in terminal buffers."
+    (when (derived-mode-p 'vterm-mode 'term-mode)
+      (evil-insert-state)))
+
+  (add-hook 'vterm-mode-hook #'my/evil-insert-in-term)
+  (add-hook 'term-mode-hook #'my/evil-insert-in-term)
+
+  ;; Optional: set default shell for vterm
+  (setq vterm-shell "/bin/bash")
+
+#+end_src
+
 
 
 

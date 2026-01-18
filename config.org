@@ -420,6 +420,7 @@ You can use the bindings CTRL plus =/- for zooming in/out.  You can also use CTR
        "g"   '(:ignore t :wk "Git")    
        "g /" '(magit-displatch :wk "Magit dispatch")
        "g ." '(magit-file-displatch :wk "Magit file dispatch")
+       "g a" '(magit-remote-add :wk "Magit add to a repository")
        "g b" '(magit-branch-checkout :wk "Switch branch")
        "g c" '(:ignore t :wk "Create") 
        "g c b" '(magit-branch-and-checkout :wk "Create branch and checkout")
@@ -895,12 +896,21 @@ Vterm is a terminal emulator within Emacs.  The ‘shell-file-name’ setting se
   ;; -------------------------------
   ;; Basic shell settings
   ;; -------------------------------
-  ;; Set default shell to zsh
+ ;; Set default shell to zsh if available, otherwise bash
+(setq shell-file-name (if (file-exists-p "/bin/zsh")
+                          "/bin/zsh"
+                        "/bin/bash"))
+;; Use zsh in vterm if available, otherwise bash
+(setq vterm-shell (if (file-exists-p "/bin/zsh")
+                      "/bin/zsh"
+                    "/bin/bash")) ;; Set default shell to zsh
   (setq shell-file-name "/bin/zsh")
   ;; Use zsh in vterm
   (setq vterm-shell "/bin/zsh")
   ;; Increase scrollback buffer
-  (setq vterm-max-scrollback 5000)
+  
+
+(setq vterm-max-scrollback 5000)
   ;; Ensure terminal type is correct
   (setq vterm-term-environment-variable "xterm-256color")
 

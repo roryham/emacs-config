@@ -807,71 +807,61 @@ Org-tempo is not a separate package but a module within org that can be enabled.
 
 * PDF Tools Full Setup
 #+begin_src emacs-lisp
-;; ------------------------------
-;; PDF Tools Configuration
-;; ------------------------------
 (use-package pdf-tools
   :ensure t
   :mode ("\\.pdf\\'" . pdf-view-mode)
   :init
-  ;; Replace DocView
   (setq pdf-view-use-scaling t
         pdf-view-use-imagemagick nil)
   :config
-  ;; Tell pdf-view-mode which modes are incompatible
   (setq pdf-view-incompatible-modes '(display-line-numbers-mode))
-  ;; Install/activate pdf-tools server if needed
-  (pdf-tools-install t) ;; the 't' avoids GUI issues
-  ;; Better scrolling
+  (pdf-tools-install t)
   (setq pdf-view-display-size 'fit-page)
+
   ;; Enable annotation minor mode
   (add-hook 'pdf-view-mode-hook #'pdf-annot-minor-mode)
-  ;; Enable text selection minor mode for copying
-  (add-hook 'pdf-view-mode-hook
-            (lambda ()
-              (setq pdf-view-selection-minor-mode t)))
 
-;; ------------------------------
-;; Vim-like navigation (Evil)
-;; ------------------------------
-(with-eval-after-load 'pdf-view
-  (evil-define-key 'normal pdf-view-mode-map
-    (kbd "j") #'pdf-view-next-line-or-next-page
-    (kbd "k") #'pdf-view-previous-line-or-previous-page
-    (kbd "h") #'image-backward-hscroll
-    (kbd "l") #'image-forward-hscroll
-    (kbd "gg") #'pdf-view-first-page
-    (kbd "G") #'pdf-view-last-page
-    (kbd "/") #'isearch-forward))
-
-;; ------------------------------
-;; Copy-Paste with OCR fallback
-;; ------------------------------
-(defun my/pdf-copy-text-or-ocr (beg end)
-  "Copy PDF text from region or page. Use OCR if no text found."
-  (interactive "r")
-  (let ((text (if (use-region-p)
-                  (pdf-view-active-region-text)
-                (pdf-view-current-page-text))))
-    (if (and text (not (string-empty-p text)))
-        (progn
+  ;; --------------------------------
+  ;; Custom copy function
+  ;; --------------------------------
+  (defun my/pdf-copy-text ()
+    "Copy the currently selected region text in pdf-view."
+    (interactive)
+    (if (pdf-view-active-region-p)
+        (let ((text (mapconcat #'identity (pdf-view-active-region-text) "\n")))
           (kill-new text)
-          (message "PDF text copied!"))
-      ;; Fallback OCR
-      (when (executable-find "tesseract")
-        (let* ((tmp-img (make-temp-file "pdf-ocr" nil ".png"))
-               (page-num (pdf-view-current-page))
-               (cmd (format "pdftoppm -png -f %d -l %d \"%s\" \"%s\""
-                            page-num page-num (buffer-file-name) (file-name-sans-extension tmp-img)))))
-          (shell-command cmd)
-          (let ((ocr-text (shell-command-to-string (format "tesseract %s - -l eng" tmp-img))))
-            (kill-new ocr-text)
-            (message "OCR text copied!")))))))
+          (pdf-view-deactivate-region)
+          (message "Copied: %s" (truncate-string-to-width text 60)))
+      (message "No region selected. Use mouse to select text first.")))
 
-;; Bind copy commands in pdf-view-mode
-(with-eval-after-load 'pdf-view
-  (define-key pdf-view-mode-map (kbd "C-c C-c") #'my/pdf-copy-text-or-ocr)
-  (define-key pdf-view-mode-map (kbd "M-w") #'my/pdf-copy-text-or-ocr))
+  ;; --------------------------------
+  ;; Evil keybindings for pdf-view
+  ;; --------------------------------
+  (with-eval-after-load 'evil
+    (evil-define-key 'normal pdf-view-mode-map
+      (kbd "j")  #'pdf-view-next-line-or-next-page
+      (kbd "k")  #'pdf-view-previous-line-or-previous-page
+      (kbd "h")  #'image-backward-hscroll
+      (kbd "l")  #'image-forward-hscroll
+      (kbd "gg") #'pdf-view-first-page
+      (kbd "G")  #'pdf-view-last-page
+      (kbd "/")  #'isearch-forward
+      (kbd "y")  #'my/pdf-copy-text)
+
+    ;; Pass annotation keys through Evil so pdf-annot-minor-mode works
+    (evil-define-key 'normal pdf-annot-minor-mode-map
+      (kbd "a t") #'pdf-annot-add-text-annotation
+      (kbd "a h") #'pdf-annot-add-highlight-markup-annotation
+      (kbd "a u") #'pdf-annot-add-underline-markup-annotation
+      (kbd "a s") #'pdf-annot-add-strikeout-markup-annotation
+      (kbd "a d") #'pdf-annot-delete
+      (kbd "a l") #'pdf-annot-list-annotations))
+
+  ;; --------------------------------
+  ;; Non-evil fallback bindings
+  ;; --------------------------------
+  (define-key pdf-view-mode-map (kbd "C-c C-c") #'my/pdf-copy-text)
+  (define-key pdf-view-mode-map (kbd "M-w")     #'my/pdf-copy-text))
 #+end_src
 
 * Projectile

@@ -95,8 +95,8 @@ Only triggers for files with names ending in -skill.org.
 Reads frontmatter values from #+SKILL_NAME and #+SKILL_DESC keywords.
 #+begin_src emacs-lisp
 (defun my/export-claude-skill ()
- ;;"Export a -skill.org file to SKILL.md with YAML frontmatter.
- ;;Only runs when the saved file ends with -skill.org."
+  "Export a -skill.org file to SKILL.md with YAML frontmatter.
+ Only runs when the saved file ends with -skill.org."
   (when (and (eq major-mode 'org-mode)
              (buffer-file-name)
              (string-suffix-p "-skill.org"

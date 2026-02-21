@@ -94,6 +94,8 @@ Automatically exports skill org files to SKILL.md with YAML frontmatter.
 Only triggers for files with names ending in -skill.org.
 Reads frontmatter values from #+SKILL_NAME and #+SKILL_DESC keywords.
 #+begin_src emacs-lisp
+(require 'ox-md)
+
 (defun my/export-claude-skill ()
   "Export a -skill.org file to SKILL.md with YAML frontmatter.
  Only runs when the saved file ends with -skill.org."

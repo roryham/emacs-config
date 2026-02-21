@@ -10,6 +10,7 @@
   - [[#sourcing-the-scripts][Sourcing the scripts]]
 - [[#all-the-icons][All the icons]]
 - [[#backup][Backup]]
+- [[#claude-code][Claude Code]]
 - [[#company][Company]]
 - [[#dashboard][Dashboard]]
 - [[#diminish][Diminish]]
@@ -82,11 +83,57 @@ This is an icon set that can be used with dashboard, dired, ibuffer and other Em
 
  
 * Backup
- By default, Emacs creates automatic backups of files in their original directories, such “file.el” and the backup “file.el~”.  This leads to a lot of clutter, so let’s tell Emacs to put all backups that it creates in the TRASH directory.
+By default, Emacs creates automatic backups of files in their original directories, such “file.el” and the backup “file.el~”.  This leads to a lot of clutter, so let’s tell Emacs to put all backups that it creates in the TRASH directory.
 
 #+begin_src emacs-lisp
 (setq backup-directory-alist '((".*" . "~/.local/share/Trash/files")))
 #+end_src
+
+* Claude Code
+Automatically exports skill org files to SKILL.md with YAML frontmatter.
+Only triggers for files with names ending in -skill.org.
+Reads frontmatter values from #+SKILL_NAME and #+SKILL_DESC keywords.
+#+begin_src emacs-lisp
+(defun my/export-claude-skill ()
+ ;;"Export a -skill.org file to SKILL.md with YAML frontmatter.
+ ;;Only runs when the saved file ends with -skill.org."
+  (when (and (eq major-mode 'org-mode)
+             (buffer-file-name)
+             (string-suffix-p "-skill.org"
+                              (file-name-nondirectory (buffer-file-name))))
+    (let* ((org-file (buffer-file-name))
+           (dir (file-name-directory org-file))
+           (tmp-file (expand-file-name "SKILL.md.tmp" dir))
+           (output-file (expand-file-name "SKILL.md" dir))
+           (skill-name (or (save-excursion
+                             (goto-char (point-min))
+                             (when (re-search-forward
+                                    "^#\\+SKILL_NAME:\\s-*\\(.+\\)" nil t)
+                               (match-string 1)))
+                           "unnamed-skill"))
+           (skill-desc (or (save-excursion
+                             (goto-char (point-min))
+                             (when (re-search-forward
+                                    "^#\\+SKILL_DESC:\\s-*\\(.+\\)" nil t)
+                               (match-string 1)))
+                           "No description")))
+      (org-export-to-file 'md tmp-file nil nil nil nil nil)
+      (let ((md-content (with-temp-buffer
+                          (insert-file-contents tmp-file)
+                          (buffer-string)))
+            (frontmatter (format "---\nname: %s\ndescription: %s\n---\n\n"
+                                 skill-name skill-desc)))
+        (with-temp-file output-file
+          (insert frontmatter)
+          (insert md-content))
+        (delete-file tmp-file)
+        (message "Claude skill exported to %s" output-file)))))
+
+(add-hook 'after-save-hook #'my/export-claude-skill)
+#+end_src
+
+
+
 
 * Company
 Company is a text completion framework for Emacs. The name stands for “complete anything”.  Completion will start automatically after you type a few letters. Use M-n and M-p to select, <return> to complete or <tab> to complete the common part.

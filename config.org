@@ -657,7 +657,7 @@ Emacs helper package to make Emacs aware of a virtual enviroment. Once Emacs kno
 * Markdown
 #+begin_src emacs-lisp
 (use-package markdown-mode
-  :elpaca t
+  :ensure t
   :mode ("\\.md\\ . markdown-mode"))
 
 #+end_src
@@ -984,21 +984,19 @@ Vterm is a terminal emulator within Emacs.  The ‘shell-file-name’ setting se
   ;; -------------------------------
   ;; Basic shell settings
   ;; -------------------------------
- ;; Set default shell to zsh if available, otherwise bash
-(setq shell-file-name (if (file-exists-p "/bin/zsh")
+  ;; Set default shell to zsh if available, otherwise bash
+  (setq shell-file-name (if (file-exists-p "/bin/zsh")
                           "/bin/zsh"
                         "/bin/bash"))
-;; Use zsh in vterm if available, otherwise bash
-(setq vterm-shell (if (file-exists-p "/bin/zsh")
+  ;; Use zsh in vterm if available, otherwise bash
+  (setq vterm-shell (if (file-exists-p "/bin/zsh")
                       "/bin/zsh"
                     "/bin/bash")) ;; Set default shell to zsh
-  (setq shell-file-name "/bin/zsh")
+  ;;(setq shell-file-name "/bin/zsh")
   ;; Use zsh in vterm
-  (setq vterm-shell "/bin/zsh")
+  ;;(setq vterm-shell "/bin/zsh")
   ;; Increase scrollback buffer
-  
-
-(setq vterm-max-scrollback 5000)
+  (setq vterm-max-scrollback 5000)
   ;; Ensure terminal type is correct
   (setq vterm-term-environment-variable "xterm-256color")
 

@@ -27,6 +27,7 @@
 - [[#ivycouncil][Ivy(Council)]]
 - [[#language-support][Language Support]]
   - [[#pyenv][Pyenv]]
+- [[#markdown][Markdown]]
 - [[#melpa][Melpa]]
 - [[#minibuffer-escape][Minibuffer Escape]]
 - [[#modeline][Modeline]]
@@ -39,6 +40,7 @@
   - [[#org-level-headers][Org Level Headers]]
   - [[#source-code-block-tag-expansion][Source Code Block Tag Expansion]]
 - [[#pdf-tools-full-setup][PDF Tools Full Setup]]
+- [[#pdf-org-tools][PDF Org Tools]]
 - [[#projectile][Projectile]]
 - [[#rainbow-delimitors][RAINBOW DELIMITORS]]
 - [[#rainbow-mode][RAINBOW MODE]]
@@ -652,6 +654,15 @@ Emacs helper package to make Emacs aware of a virtual enviroment. Once Emacs kno
 
 #+end_src
 
+* Markdown
+#+begin_src emacs-lisp
+(use-package markdown-mode
+  :elpaca t
+  :mode ("\\.md\\ . markdown-mode"))
+
+#+end_src
+
+
 * Melpa
 MELPA (Milkypostman’s Emacs Lisp Package Archive) is one of the main package repositories for Emacs. Think of it as an “app store” for Emacs Lisp packages. 
 #+begin_src 
@@ -863,6 +874,22 @@ Org-tempo is not a separate package but a module within org that can be enabled.
   (define-key pdf-view-mode-map (kbd "C-c C-c") #'my/pdf-copy-text)
   (define-key pdf-view-mode-map (kbd "M-w")     #'my/pdf-copy-text))
 #+end_src
+
+* PDF Org Tools
+#+begin_src emacs-lisp
+(use-package org-pdftools
+  :ensure t
+  :hook (org-mode . org-pdftools-setup-link)
+  :init
+  (with-eval-after-load 'org
+    (org-pdftools-setup-link))
+  :config
+  (setq org-pdftools-root-dir "~/datasheets/")
+  (setq org-pdftools-search-string-separator "??"))
+
+(global-set-key (kbd "C-c l") #'org-store-link)
+#+end_src
+
 
 * Projectile
 [[https://github.com/nex3/perspective-el][Projectile]] is a project interaction library for Emacs.  It should be noted that many projectile commands do not work if you have set “fish” as the “shell-file-name” for Emacs.  I had initially set “fish” as the “shell-file-name” in the Vterm section of this config, but oddly enough I changed it to “bin/sh” and projectile now works as expected, and Vterm still uses “fish” because my default user “sh” on my Linux system is “fish”.

@@ -984,6 +984,7 @@ The following settings are simple modes that are enabled (or disabled) so that E
                   (if (char-equal c ?<) t (,electric-pair-inhibit-predicate c))))))
 (global-auto-revert-mode t)  ;; Automatically show changes if the file has changed
 (global-display-line-numbers-mode 1) ;; Display line numbers
+(add-hook 'pdf-view-mode-hook (lambda () (display-line-numbers-mode -1))) ;; Disable line numbers in PDFs
 (column-number-mode 1)       ;; Enable column numbers
 (global-visual-line-mode t)  ;; Enable truncated lines
 (menu-bar-mode -1)           ;; Disable the menu bar 

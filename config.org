@@ -66,7 +66,7 @@
 
 ** Sourcing the scripts
 #+begin_src emacs-lisp
-(require 'elpaca-setup)  ;; The elpaca Package Manager
+;; (require 'elpaca-setup)  ;; The elpaca Package Manager
 #+end_src
 
 * All the icons
@@ -77,6 +77,7 @@ This is an icon set that can be used with dashboard, dired, ibuffer and other Em
   :if (display-graphic-p))
 
 (use-package nerd-icons-dired
+  :ensure t
   :hook (dired-mode . nerd-icons-dired-mode)) 
 
 #+end_src
@@ -141,6 +142,7 @@ Reads frontmatter values from #+SKILL_NAME and #+SKILL_DESC keywords.
 Company is a text completion framework for Emacs. The name stands for “complete anything”.  Completion will start automatically after you type a few letters. Use M-n and M-p to select, <return> to complete or <tab> to complete the common part.
 #+begin_src emacs-lisp
 (use-package company
+  :ensure t
   :defer 2
   :diminish
   :custom
@@ -152,6 +154,7 @@ Company is a text completion framework for Emacs. The name stands for “complet
   :hook (after-init . global-company-mode))
 
 (use-package company-box
+  :ensure t
   :after company
   :diminish
   :hook (company-mode . company-box-mode))
@@ -190,7 +193,12 @@ Emacs Dashboard is an extensible startup screen showing you recent files, bookma
 * Diminish
 This package implements hiding or abbreviation of the modeline displays (lighters) of minor-modes.  With this package installed, you can add ‘:diminish’ to any use-package block to hide that particular mode in the modeline.
 #+begin_src emacs-lisp
-(use-package diminish)
+(use-package diminish
+  :ensure t)
+#+end_src
+
+#+begin_src emacs-lisp
+(elpaca-wait)
 #+end_src
 
 
@@ -229,6 +237,7 @@ This package implements hiding or abbreviation of the modeline displays (lighter
 (advice-add 'dired-do-delete :after #'my/run-updatedb-after-dired)
 
 (use-package dired-open
+  :ensure t
   :config
   (setq dired-open-extensions '(("gif" . "sxiv")
                                 ("jpg" . "sxiv")
@@ -237,6 +246,7 @@ This package implements hiding or abbreviation of the modeline displays (lighter
                                 ("mp4" . "mpv"))))
 
 (use-package peep-dired
+  :ensure t
   :after dired
   :hook (evil-normalize-keymaps . peep-dired-hook)
   :config
@@ -251,6 +261,7 @@ This package implements hiding or abbreviation of the modeline displays (lighter
 An RSS newsfeed reader for Emacs.  Move through the articles with ‘j/k’.  Move through the stories with ‘CTRL j/k’ when in other frame.
 #+begin_src emacs-lisp
 (use-package elfeed
+  :ensure t
   :config
   (setq elfeed-search-feed-face ":foreground #ffffff :weight bold"
         elfeed-feeds (quote
@@ -274,6 +285,7 @@ An RSS newsfeed reader for Emacs.  Move through the articles with ‘j/k’.  Mo
  
 
 (use-package elfeed-goodies
+  :ensure t
   :init
   (elfeed-goodies/setup)
   :config
@@ -290,6 +302,7 @@ Evil is an extensible vi/vim layer for Emacs.  Because…let’s face it.  The V
 
 ;; Expands to: (elpaca evil (use-package evil :demand t))
    (use-package evil
+  :ensure t
        :init      ;; tweak evil's configuration before loading it
        (setq evil-want-integration t  ;; This is optional since it's already set to t by default.
              ;;(setq evil-want-C-u-scroll t) ;; Again here to be safe
@@ -301,6 +314,7 @@ Evil is an extensible vi/vim layer for Emacs.  Because…let’s face it.  The V
        (evil-mode))
 
    (use-package evil-collection
+  :ensure t
      :after evil
      :config
      ;; Do not uncomment this unless you want to specify each and every mode
@@ -311,8 +325,11 @@ Evil is an extensible vi/vim layer for Emacs.  Because…let’s face it.  The V
      (evil-collection-init))
 
 
-   (use-package evil-tutor)
+   (use-package evil-tutor
+  :ensure t)
+   (elpaca-wait)
 
+   
    ;; Using RETURN to follow links in Org/Evil 
    ;; Unmap keys in 'evil-maps if not done, (setq org-return-follows-link t) will not work
    (with-eval-after-load 'evil-maps
@@ -390,6 +407,7 @@ You can use the bindings CTRL plus =/- for zooming in/out.  You can also use CTR
 #+begin_src emacs-lisp
 
    (use-package general
+  :ensure t
      :config
      (general-evil-setup)
 
@@ -597,7 +615,10 @@ You can use the bindings CTRL plus =/- for zooming in/out.  You can also use CTR
        "w L" '(buf-move-right :wk "Buffer move right"))
 
        )
+
+   (elpaca-wait)
    
+
 #+end_src
 
 * Git Programs
@@ -607,10 +628,12 @@ You can use the bindings CTRL plus =/- for zooming in/out.  You can also use CTR
 git-timemachine is a program that allows you to move backwards and forwards through a file’s commits.  ‘SPC g t’ will open the time machine on a file if it is in a git repo.  Then, while in normal mode, you can use ‘CTRL-j’ and ‘CTRL-k’ to move backwards and forwards through the commits.
 Magit requires transient. If the installed version of transient is too old, Magit will not load and will throw an error in emacs
 #+begin_src emacs-lisp
-    (use-package transient)
+    (use-package transient
+  :ensure t)
       
 
     (use-package git-timemachine      
+  :ensure t
       :hook (evil-normalize-keymaps . git-timemachine-hook)
       :config
         (evil-define-key 'normal git-timemachine-mode-map (kbd "C-j") 'git-timemachine-show-previous-revision)
@@ -622,8 +645,13 @@ Magit requires transient. If the installed version of transient is too old, Magi
 Magit is a full-featured git client for Emacs. For some reason, this wouldn't install using elpaca, so I had to use use package-list-packages to install Magit
 
 #+begin_src emacs-lisp
-(use-package magit)
+(use-package magit
+  :ensure t)
   
+#+end_src
+
+#+begin_src emacs-lisp
+(elpaca-wait)
 #+end_src
 
 * Ivy(Council)
@@ -632,6 +660,7 @@ Magit is a full-featured git client for Emacs. For some reason, this wouldn't in
   Ivy-rich allows us to add descriptions alongside the commands in M-x.
 #+begin_src emacs-lisp
 (use-package counsel
+  :ensure t
   :after ivy
   :diminish
   :config 
@@ -639,15 +668,16 @@ Magit is a full-featured git client for Emacs. For some reason, this wouldn't in
     (setq ivy-initial-inputs-alist nil)) ;; removes starting ^ regex in M-x
 
 (use-package ivy
+  :ensure t
   :bind
   ;; ivy-resume resumes the last Ivy-based completion.
   (("C-c C-r" . ivy-resume)
    ("C-x B" . ivy-switch-buffer-other-window))
   :diminish
   :custom
-  (setq ivy-use-virtual-buffers t)
-  (setq ivy-count-format "(%d/%d) ")
-  (setq enable-recursive-minibuffers t)
+  (ivy-use-virtual-buffers t)
+  (ivy-count-format "(%d/%d) ")
+  (enable-recursive-minibuffers t)
   :config
   (ivy-mode))
 
@@ -656,13 +686,13 @@ Magit is a full-featured git client for Emacs. For some reason, this wouldn't in
   :init (all-the-icons-ivy-rich-mode 1))
 
 (use-package ivy-rich
-  :after ivy
   :ensure t
+  :after ivy
   :init (ivy-rich-mode 1) ;; this gets us descriptions in M-x.
   :custom
-  (ivy-virtual-abbreviate 'full
-   ivy-rich-switch-buffer-align-virtual-buffer t
-   ivy-rich-path-style 'abbrev)
+  (ivy-virtual-abbreviate 'full)
+  (ivy-rich-switch-buffer-align-virtual-buffer t)
+  (ivy-rich-path-style 'abbrev)
   :config
   (ivy-set-display-transformer 'ivy-switch-buffer
                                'ivy-rich-switch-buffer-transformer))
@@ -683,7 +713,7 @@ Emacs has built-in programming language modes for Lisp, Scheme, DSSSL, Ada, ASM,
 
 ;; Enable CC Mode for C programming
 (use-package cc-mode
-  :ensure t)  ;; Ensure cc-mode is installed
+  :ensure nil)  ;; Don't install via elpaca. Built in package
 
 ;; Set up basic C mode settings
 (add-hook 'c-mode-hook
@@ -762,6 +792,7 @@ Neotree is a file tree viewer.  When you open neotree, it jumps to the current f
 
 #+begin_src emacs-lisp
 (use-package neotree
+  :ensure t
   :after nerd-icons
   :config
   (setq neo-smart-open t
@@ -945,6 +976,7 @@ Org-tempo is not a separate package but a module within org that can be enabled.
 
 #+begin_src emacs-lisp
 (use-package projectile
+  :ensure t
   :config
   (projectile-mode 1))
 
@@ -955,6 +987,7 @@ Org-tempo is not a separate package but a module within org that can be enabled.
 Adding rainbow coloring to parentheses.
 #+begin_src emacs-lisp
 (use-package rainbow-delimiters
+  :ensure t
   :hook ((emacs-lisp-mode . rainbow-delimiters-mode)
          (clojure-mode . rainbow-delimiters-mode)))
 
@@ -964,6 +997,7 @@ Adding rainbow coloring to parentheses.
 Display the actual color as a background for any hex color value (ex. #ffffff).  The code block below enables rainbow-mode in all programming modes (prog-mode) as well as org-mode, which is why rainbow works in this document.
 #+begin_src emacs-lisp
   (use-package rainbow-mode
+  :ensure t
     :diminish
     :hook ((org-mode . rainbow-mode)
   	 (prog-mode . rainbow-mode)))
@@ -999,6 +1033,7 @@ In my configs, all of my shells (bash, fish, zsh and the ESHELL) require my shel
 ** Eshell
 #+begin_src emacs-lisp
 (use-package eshell-toggle
+  :ensure t
   :custom
   (eshell-toggle-size-fraction 3)
   (eshell-toggle-use-projectile-root t)
@@ -1006,6 +1041,7 @@ In my configs, all of my shells (bash, fish, zsh and the ESHELL) require my shel
   (eshell-toggle-init-function #'eshell-toggle-init-ansi-term))
 
   (use-package eshell-syntax-highlighting
+  :ensure t
     :after esh-mode
     :config
     (eshell-syntax-highlighting-global-mode +1))
@@ -1094,6 +1130,7 @@ Vterm is a terminal emulator within Emacs.  The ‘shell-file-name’ setting se
 [[https://github.com/jixiuf/vterm-toggle][Vterm-toggle]] toggles between the vterm buffer and whatever buffer you are editing.
 #+begin_src emacs-lisp
 (use-package vterm-toggle
+  :ensure t
   :after vterm
   :config
   ;; When running programs in Vterm and in 'normal' mode, make sure that ESC
@@ -1120,7 +1157,8 @@ Vterm is a terminal emulator within Emacs.  The ‘shell-file-name’ setting se
 * SUDO Edit
 sudo-edit gives us the ability to open files with sudo privileges or switch over to editing with sudo privileges if we initially opened the file without such privileges.
 #+begin_src emacs-lisp
-(use-package sudo-edit)
+(use-package sudo-edit
+  :ensure t)
 
 #+end_src
 
@@ -1136,6 +1174,7 @@ sudo-edit gives us the ability to open files with sudo privileges or switch over
 (add-to-list 'custom-theme-load-path "~/.config/emacs/themes/")
 
 (use-package doom-themes
+  :ensure t
   :config
   (setq doom-themes-enable-bold t    ; if nil, bold is universally disabled
         doom-themes-enable-italic t) ; if nil, italics is universally disabled
@@ -1150,7 +1189,8 @@ sudo-edit gives us the ability to open files with sudo privileges or switch over
 
 * TL;DR
 #+begin_src emacs-lisp
-(use-package tldr)
+(use-package tldr
+  :ensure t)
 
 #+end_src
 
@@ -1166,6 +1206,7 @@ With Emacs version 29, true transparency has been added.  I have turned transpar
 * WHICH-KEY
 #+begin_src emacs-lisp
 (use-package which-key
+  :ensure t
   :init
     (which-key-mode 1)
   :diminish

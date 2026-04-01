@@ -1,31 +1,10 @@
- ;;; init.el --- Emacs initialization file
-;;; Commentary:
-;; Load Elpaca setup first, then config.org
+;;; init.el --- Emacs initialization file -*- lexical-binding: t; -*-
 
-;;; Code:
-
-;; Load Elpaca package manager from scripts directory
+(message "STEP 1: init.el loading")
 (load (expand-file-name "scripts/elpaca-setup.el" user-emacs-directory))
-
-;; Now load config.org
+(message "STEP 2: elpaca loaded")
 (org-babel-load-file
- (expand-file-name
-  "config.org"
-  user-emacs-directory))
+ (expand-file-name "config.org" user-emacs-directory))
+(message "STEP 3: config.org loaded")
 
 ;;; init.el ends here
-
-;; Custom variables (added by Emacs)
-(custom-set-variables
- ;; custom-set-variables was added by Custom.
- '(package-selected-packages '(magit)))
-
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- '(org-level-1 ((t (:inherit outline-1 :height 1.7))))
- '(org-level-2 ((t (:inherit outline-2 :height 1.6))))
- '(org-level-3 ((t (:inherit outline-3 :height 1.5))))
- '(org-level-4 ((t (:inherit outline-4 :height 1.4))))
- '(org-level-5 ((t (:inherit outline-5 :height 1.3))))
- '(org-level-6 ((t (:inherit outline-5 :height 1.2))))
- '(org-level-7 ((t (:inherit outline-5 :height 1.1)))))

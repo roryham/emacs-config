@@ -8,8 +8,13 @@
 - [[#important-programs-to-load-first][IMPORTANT PROGRAMS TO LOAD FIRST]]
   - [[#adding-the-scripts-directory-to-path][Adding the scripts directory to path]]
   - [[#sourcing-the-scripts][Sourcing the scripts]]
+- [[#apps-script-development][Apps Script Development]]
+  - [[#javascript-mode-for-gs-and-js-files][JavaScript Mode for .gs and .js files]]
+  - [[#lsp-for-javascript--apps-script][LSP for JavaScript / Apps Script]]
+  - [[#clasp-integration][Clasp Integration]]
 - [[#all-the-icons][All the icons]]
 - [[#backup][Backup]]
+- [[#buffer-move][Buffer move]]
 - [[#claude-code][Claude Code]]
 - [[#company][Company]]
 - [[#dashboard][Dashboard]]
@@ -25,6 +30,7 @@
 - [[#git-programs][Git Programs]]
   - [[#git-time-machine][Git Time Machine]]
   - [[#magit][Magit]]
+- [[#gptel][gptel]]
 - [[#ivycouncil][Ivy(Council)]]
 - [[#language-support][Language Support]]
   - [[#pyenv][Pyenv]]
@@ -68,6 +74,115 @@
 #+begin_src emacs-lisp
 ;; (require 'elpaca-setup)  ;; The elpaca Package Manager
 #+end_src
+* Apps Script Development
+Configuration for round-trip Google Apps Script development using clasp,
+js2-mode, LSP, and AI assistance via Claude Code in vterm.
+
+** JavaScript Mode for .gs and .js files
+Apps Script files use .gs extension on Google's side but .js locally
+when managed by clasp. js2-mode gives us proper JS syntax handling.
+
+#+begin_src emacs-lisp
+(use-package js2-mode
+  :ensure t
+  :mode (("\\.js\\'" . js2-mode)
+         ("\\.gs\\'" . js2-mode))
+  :hook (js2-mode . (lambda ()
+                      (setq js2-basic-offset 2
+                            js2-strict-missing-semi-warning nil
+                            js2-missing-semi-one-line-override nil)
+                      (flycheck-mode 1)))
+  :config
+  ;; Apps Script globals so js2 doesn't flag them as undefined
+  (setq js2-global-externs
+        '("SpreadsheetApp" "DriveApp" "GmailApp" "DocumentApp"
+          "FormApp" "CalendarApp" "ContactsApp" "GroupsApp"
+          "Logger" "console" "Utilities" "UrlFetchApp"
+          "PropertiesService" "CacheService" "LockService"
+          "Session" "ScriptApp" "HtmlService" "ContentService"
+          "Browser" "MailApp" "LanguageApp" "Maps" "Charts"
+          "XmlService" "Jdbc" "BigQuery" "Drive" "Sheets"
+          "Gmail" "Calendar" "Docs" "Forms" "Slides")))
+#+end_src
+
+** LSP for JavaScript / Apps Script
+Provides completion, hover docs, and go-to-definition. Requires
+typescript-language-server installed globally:
+  npm install -g typescript typescript-language-server
+
+#+begin_src emacs-lisp
+(use-package lsp-mode
+  :ensure t
+  :commands (lsp lsp-deferred)
+  :hook ((js2-mode . lsp-deferred))
+  :init
+  (setq lsp-keymap-prefix "C-c L"
+        lsp-completion-provider :capf
+        lsp-idle-delay 0.500
+        lsp-headerline-breadcrumb-enable nil)
+  :config
+  (setq lsp-enable-snippet nil))
+
+(use-package lsp-ui
+  :ensure t
+  :after lsp-mode
+  :hook (lsp-mode . lsp-ui-mode)
+  :config
+  (setq lsp-ui-doc-enable t
+        lsp-ui-doc-position 'at-point
+        lsp-ui-sideline-enable t
+        lsp-ui-sideline-show-hover nil))
+#+end_src
+
+** Clasp Integration
+Wrapper functions for the Google clasp CLI. Run from any file inside
+the project — they use projectile to find the project root.
+
+#+begin_src emacs-lisp
+(defun rh/clasp-in-project (cmd &optional buffer-name async)
+  "Run clasp CMD from current projectile project root.
+If ASYNC is non-nil, run as async-shell-command in BUFFER-NAME."
+  (let ((default-directory (or (projectile-project-root)
+                               default-directory)))
+    (if async
+        (async-shell-command cmd (or buffer-name "*clasp*"))
+      (compile cmd))))
+
+(defun rh/clasp-push ()
+  "Push local Apps Script files to Google."
+  (interactive)
+  (rh/clasp-in-project "clasp push"))
+
+(defun rh/clasp-push-watch ()
+  "Auto-push to Google on every save (runs in background buffer)."
+  (interactive)
+  (rh/clasp-in-project "clasp push --watch" "*clasp-watch*" t))
+
+(defun rh/clasp-pull ()
+  "Pull Apps Script files from Google."
+  (interactive)
+  (rh/clasp-in-project "clasp pull"))
+
+(defun rh/clasp-open ()
+  "Open the Apps Script project in the browser."
+  (interactive)
+  (rh/clasp-in-project "clasp open" nil nil))
+
+(defun rh/clasp-logs ()
+  "Tail Apps Script execution logs."
+  (interactive)
+  (rh/clasp-in-project "clasp logs --watch" "*clasp-logs*" t))
+
+(defun rh/clasp-deployments ()
+  "List Apps Script deployments."
+  (interactive)
+  (rh/clasp-in-project "clasp deployments"))
+
+(defun rh/clasp-status ()
+  "Show clasp status (which files will be pushed/pulled)."
+  (interactive)
+  (rh/clasp-in-project "clasp status"))
+#+end_src
 
 * All the icons
 This is an icon set that can be used with dashboard, dired, ibuffer and other Emacs programs.
@@ -88,6 +203,15 @@ By default, Emacs creates automatic backups of files in their original directori
 
 #+begin_src emacs-lisp
 (setq backup-directory-alist '((".*" . "~/.local/share/Trash/files")))
+#+end_src
+
+* Buffer move
+This is required to use the move buffer general keybindings
+#+begin_src emacs-lisp
+(use-package buffer-move
+  :ensure t
+  :commands (buf-move-left buf-move-right buf-move-up buf-move-down))
+
 #+end_src
 
 * Claude Code
@@ -406,218 +530,243 @@ You can use the bindings CTRL plus =/- for zooming in/out.  You can also use CTR
 
 #+begin_src emacs-lisp
 
-   (use-package general
-  :ensure t
-     :config
-     (general-evil-setup)
+ (use-package general
+:ensure t
+   :config
+   (general-evil-setup)
 
-     ;; setup 'SPC' as the global leader key
-   (general-create-definer dt/leader-keys
-      :states '(normal visual emacs) ;; normal mode, insert mode, visual mode, emacs mode. Remove the state for insert mode or cannot place text
-      :keymaps 'override
-      :prefix "SPC" ;; set leader
-      :global-prefix "M-SPC") ;; access leader in insert mode
+   ;; setup 'SPC' as the global leader key
+ (general-create-definer dt/leader-keys
+    :states '(normal visual emacs) ;; normal mode, insert mode, visual mode, emacs mode. Remove the state for insert mode or cannot place text
+    :keymaps 'override
+    :prefix "SPC" ;; set leader
+    :global-prefix "M-SPC") ;; access leader in insert mode
 
 
-    (dt/leader-keys
-      "SPC" '(counsel-M-x :wk "Counsel M-x")
-      "." '(find-file :wk "Find file")
-      "=" '(perspective-map :wk "Perspective") ;; Lists all the perspective keybindings
-      "TAB TAB" '(comment-line :wk "Comment lines")
-      "u" '(universal-argument :wk "Universal argument"))
-
-      
-    (dt/leader-keys
-       "b" '(:ignore t :wk "Bookmarks/Buffers")
-       "b b" '(switch-to-buffer :wk "Switch to buffer")
-       "b c" '(clone-indirect-buffer :wk "Create indirect buffer copy in a split")
-       "b C" '(clone-indirect-buffer-other-window :wk "Clone indirect buffer in new window")
-       "b d" '(bookmark-delete :wk "Delete bookmark")
-       "b i" '(ibuffer :wk "Ibuffer")
-       "b k" '(kill-current-buffer :wk "Kill current buffer")
-       "b K" '(kill-some-buffers :wk "Kill multiple buffers")
-       "b l" '(list-bookmarks :wk "List bookmarks")
-       "b m" '(bookmark-set :wk "Set bookmark")
-       "b n" '(next-buffer :wk "Next buffer")
-       "b p" '(previous-buffer :wk "Previous buffer")
-       "b r" '(revert-buffer :wk "Reload buffer")
-       "b R" '(rename-buffer :wk "Rename buffer")
-       "b s" '(basic-save-buffer :wk "Save buffer")
-       "b S" '(save-some-buffers :wk "Save multiple buffers")
-       "b w" '(bookmark-save :wk "Save current bookmarks to bookmark file"))
-
-    (dt/leader-keys
-       "d"   '(:ignore t :wk "Dired")
-       "d d" '(dired :wk "Open dired")
-       "d j" '(dired-jump :wk "Dired jump to current")
-       "d n" '(neotree-dir :wk "Open directory in neotree")
-       "d p" '(peep-dired :wk "Peep-dired")
-       "d U" '((lambda () (interactive)
-                (dired (concat "/sudo::" default-directory)))
-                :wk "Open current dired directory as Root" ))
+  (dt/leader-keys
+    "SPC" '(counsel-M-x :wk "Counsel M-x")
+    "." '(find-file :wk "Find file")
+    "=" '(perspective-map :wk "Perspective") ;; Lists all the perspective keybindings
+    "TAB TAB" '(comment-line :wk "Comment lines")
+    "u" '(universal-argument :wk "Universal argument"))
 
    (dt/leader-keys
-       "e"   '(:ignore t :wk "Eshell/Evaluate")    
-       "e b" '(eval-buffer :wk "Evaluate elisp in buffer")
-       "e d" '(eval-defun :wk "Evaluate defun containing or after point")
-       "e e" '(eval-expression :wk "Evaluate and elisp expression")
-       "e l" '(eval-last-sexp :wk "Evaluate elisp expression before point")
-       "e r" '(eval-region :wk "Evaluate elisp in region"))
-  
-   (dt/leader-keys
-       "f"   '(:ignore t :wk "Files")    
-       "f c" '((lambda () (interactive)
-              (find-file "~/.config/emacs/config.org")) 
-              :wk "Open emacs config.org")
-       "f d" '(find-grep-dired :wk "Search for string in files in DIR")
-       "f e" '((lambda () (interactive)
-              (dired "~/.config/emacs/")) 
-            :wk "Open user-emacs-directory in dired")
-       "f g" '(counsel-grep-or-swiper :wk "Search for string current file")
-       "f i" '((lambda () (interactive)
-              (find-file "~/.config/emacs/init.el")) 
-            :wk "Open emacs init.el")
-       "f j" '(counsel-file-jump :wk "Jump to a file below current directory")
-       "f k" '((lambda () (interactive)
-              (find-file "~/Documents/projects/cmd_emacs/emacs_notes.org")) 
-              :wk "Open emacs RH knoweldge base emacs_notes.org")
-       "f l" '(counsel-locate :wk "Locate a file")
-       "f r" '(counsel-recentf :wk "Find recent files")
-       "f u" '(sudo-edit-find-file :wk "Sudo find file")
-       "f U" '(sudo-edit :wk "Sudo edit file"))
+     "a"   '(:ignore t :wk "AI/gptel")
+     "a a" '(gptel :wk "Open gptel chat")
+     "a s" '(gptel-send :wk "Send to LLM")
+     "a m" '(gptel-menu :wk "gptel menu")
+     "a r" '(gptel-rewrite :wk "Rewrite region")
+     "a c" '(:ignore t :wk "Context")
+     "a c a" '(gptel-add :wk "Add buffer/region as context")
+     "a c f" '(gptel-add-file :wk "Add file as context")
+     "a c c" '(gptel-context-remove-all :wk "Clear all context")
+     "a k" '(gptel-abort :wk "Abort request")
+     "a o" '((lambda () (interactive)
+               (find-file "~/gptel-chats/"))
+             :wk "Open chats folder")
+     "a S" '(gptel-system-prompt :wk "Set system prompt")) 
+    
+  (dt/leader-keys
+     "b" '(:ignore t :wk "Bookmarks/Buffers")
+     "b b" '(switch-to-buffer :wk "Switch to buffer")
+     "b c" '(clone-indirect-buffer :wk "Create indirect buffer copy in a split")
+     "b C" '(clone-indirect-buffer-other-window :wk "Clone indirect buffer in new window")
+     "b d" '(bookmark-delete :wk "Delete bookmark")
+     "b i" '(ibuffer :wk "Ibuffer")
+     "b k" '(kill-current-buffer :wk "Kill current buffer")
+     "b K" '(kill-some-buffers :wk "Kill multiple buffers")
+     "b l" '(list-bookmarks :wk "List bookmarks")
+     "b m" '(bookmark-set :wk "Set bookmark")
+     "b n" '(next-buffer :wk "Next buffer")
+     "b p" '(previous-buffer :wk "Previous buffer")
+     "b r" '(revert-buffer :wk "Reload buffer")
+     "b R" '(rename-buffer :wk "Rename buffer")
+     "b s" '(basic-save-buffer :wk "Save buffer")
+     "b S" '(save-some-buffers :wk "Save multiple buffers")
+     "b w" '(bookmark-save :wk "Save current bookmarks to bookmark file"))
 
-   (dt/leader-keys
-       "g"   '(:ignore t :wk "Git")    
-       "g /" '(magit-displatch :wk "Magit dispatch")
-       "g ." '(magit-file-displatch :wk "Magit file dispatch")
-       "g a" '(magit-remote-add :wk "Magit add to a repository")
-       "g b" '(magit-branch-checkout :wk "Switch branch")
-       "g c" '(:ignore t :wk "Create") 
-       "g c b" '(magit-branch-and-checkout :wk "Create branch and checkout")
-       "g c c" '(magit-commit-create :wk "Create commit")
-       "g c f" '(magit-commit-fixup :wk "Create fixup commit")
-       "g C" '(magit-clone :wk "Clone repo")
-       "g f" '(:ignore t :wk "Find") 
-       "g f c" '(magit-show-commit :wk "Show commit")
-       "g f f" '(magit-find-file :wk "Magit find file")
-       "g f g" '(magit-find-git-config-file :wk "Find gitconfig file")
-       "g F" '(magit-fetch :wk "Git fetch")
-       "g g" '(magit-status :wk "Magit status")
-       "g i" '(magit-init :wk "Initialize git repo")
-       "g l" '(magit-log-buffer-file :wk "Magit buffer log")
-       "g r" '(vc-revert :wk "Git revert file")
-       "g s" '(magit-stage-file :wk "Git stage file")
-       "g t" '(git-timemachine :wk "Git time machine")
-       "g u" '(magit-stage-file :wk "Git unstage file"))
-       
-   (dt/leader-keys
-       "h"   '(:ignore t :wk "Help")
-       "h a" '(counsel-apropos :wk "Apropos")
-       "h b" '(describe-bindings :wk "Describe bindings")
-       "h c" '(describe-char :wk "Describe character under cursor")
-       "h d" '(:ignore t :wk "Emacs documentation")
-       "h d a" '(about-emacs :wk "About Emacs")
-       "h d d" '(view-emacs-debugging :wk "View Emacs debugging")
-       "h d f" '(view-emacs-FAQ :wk "View Emacs FAQ")
-       "h d m" '(info-emacs-manual :wk "The Emacs manual")
-       "h d n" '(view-emacs-news :wk "View Emacs news")
-       "h d o" '(describe-distribution :wk "How to obtain Emacs")
-       "h d p" '(view-emacs-problems :wk "View Emacs problems")
-       "h d t" '(view-emacs-todo :wk "View Emacs todo")
-       "h d w" '(describe-no-warranty :wk "Describe no warranty")
-       "h e" '(view-echo-area-messages :wk "View echo area messages")
-       "h f" '(describe-function :wk "Describe function")
-       "h F" '(describe-face :wk "Describe face")
-       "h g" '(describe-gnu-project :wk "Describe GNU Project")
-       "h i" '(info :wk "Info")
-       "h I" '(describe-input-method :wk "Describe input method")
-       "h k" '(describe-key :wk "Describe key")
-       "h l" '(view-lossage :wk "Display recent keystrokes and the commands run")
-       "h L" '(describe-language-environment :wk "Describe language environment")
-       "h m" '(describe-mode :wk "Describe mode")
-       "h r" '(:ignore t :wk "Reload")
-       "h r r" '((lambda () (interactive)
-                (load-file "~/.config/emacs/init.el")
-                (ignore (elpaca-process-queues)))
-                :wk "Reload emacs config")
-       "h t" '(load-theme :wk "Load theme")
-       "h v" '(describe-variable :wk "Describe variable")
-       "h w" '(where-is :wk "Prints keybinding for command if set")
-       "h x" '(describe-command :wk "Display full documentation for command"))
-  
-   (dt/leader-keys
-       "m"   '(:ignore t :wk "Org")
-       "m a" '(org-agenda :wk "Org agenda")
-       "m e" '(org-export-dispatch :wk "Org export dispatch")
-       "m i" '(org-toggle-item :wk "Org toggle item")
-       "m t" '(org-todo :wk "Org todo")
-       "m B" '(org-babel-tangle :wk "Org babel tangle")
-       "m T" '(org-todo-list :wk "Org todo list"))
+ (dt/leader-keys
+     "c"   '(:ignore t :wk "Clasp/AppsScript")
+     "c p" '(rh/clasp-push :wk "Clasp push")
+     "c P" '(rh/clasp-pull :wk "Clasp pull")
+     "c w" '(rh/clasp-push-watch :wk "Clasp push --watch")
+     "c o" '(rh/clasp-open :wk "Open in browser")
+     "c l" '(rh/clasp-logs :wk "Tail logs")
+     "c s" '(rh/clasp-status :wk "Clasp status")
+     "c d" '(rh/clasp-deployments :wk "List deployments"))
 
-   (dt/leader-keys
-       "m b" '(:ignore t :wk "Tables")
-       "m b -" '(org-table-insert-hline :wk "Insert hline in table"))
+  (dt/leader-keys
+     "d"   '(:ignore t :wk "Dired")
+     "d d" '(dired :wk "Open dired")
+     "d j" '(dired-jump :wk "Dired jump to current")
+     "d n" '(neotree-dir :wk "Open directory in neotree")
+     "d p" '(peep-dired :wk "Peep-dired")
+     "d U" '((lambda () (interactive)
+              (dired (concat "/sudo::" default-directory)))
+              :wk "Open current dired directory as Root" ))
 
-   (dt/leader-keys
-       "m d" '(:ignore t :wk "Date/deadline")
-       "m d t" '(org-time-stamp :wk "Org time stamp"))
+ (dt/leader-keys
+     "e"   '(:ignore t :wk "Eshell/Evaluate")    
+     "e b" '(eval-buffer :wk "Evaluate elisp in buffer")
+     "e d" '(eval-defun :wk "Evaluate defun containing or after point")
+     "e e" '(eval-expression :wk "Evaluate and elisp expression")
+     "e l" '(eval-last-sexp :wk "Evaluate elisp expression before point")
+     "e r" '(eval-region :wk "Evaluate elisp in region"))
 
-   (dt/leader-keys
-       "o"   '(:ignore t :wk "Open")
-       "o d" '(dashboard-open :wk "Dashboard")
-       "o e" '(elfeed :wk "Elfeed RSS")
-       "o f" '(make-frame :wk "Open buffer in new frame")
-       "o F" '(select-frame-by-name :wk "Select frame by name")
-       "o p" '(pdf-view-mode :wk "Open PDF"))
+ (dt/leader-keys
+     "f"   '(:ignore t :wk "Files")    
+     "f c" '((lambda () (interactive)
+            (find-file "~/.config/emacs/config.org")) 
+            :wk "Open emacs config.org")
+     "f d" '(find-grep-dired :wk "Search for string in files in DIR")
+     "f e" '((lambda () (interactive)
+            (dired "~/.config/emacs/")) 
+          :wk "Open user-emacs-directory in dired")
+     "f g" '(counsel-grep-or-swiper :wk "Search for string current file")
+     "f i" '((lambda () (interactive)
+            (find-file "~/.config/emacs/init.el")) 
+          :wk "Open emacs init.el")
+     "f j" '(counsel-file-jump :wk "Jump to a file below current directory")
+     "f k" '((lambda () (interactive)
+            (find-file "~/Documents/projects/cmd_emacs/emacs_notes.org")) 
+            :wk "Open emacs RH knoweldge base emacs_notes.org")
+     "f l" '(counsel-locate :wk "Locate a file")
+     "f r" '(counsel-recentf :wk "Find recent files")
+     "f u" '(sudo-edit-find-file :wk "Sudo find file")
+     "f U" '(sudo-edit :wk "Sudo edit file"))
+
+ (dt/leader-keys
+     "g"   '(:ignore t :wk "Git")    
+     "g /" '(magit-displatch :wk "Magit dispatch")
+     "g ." '(magit-file-dispatch :wk "Magit file dispatch")
+     "g a" '(magit-remote-add :wk "Magit add to a repository")
+     "g b" '(magit-branch-checkout :wk "Switch branch")
+     "g c" '(:ignore t :wk "Create") 
+     "g c b" '(magit-branch-and-checkout :wk "Create branch and checkout")
+     "g c c" '(magit-commit-create :wk "Create commit")
+     "g c f" '(magit-commit-fixup :wk "Create fixup commit")
+     "g C" '(magit-clone :wk "Clone repo")
+     "g f" '(:ignore t :wk "Find") 
+     "g f c" '(magit-show-commit :wk "Show commit")
+     "g f f" '(magit-find-file :wk "Magit find file")
+     "g f g" '(magit-find-git-config-file :wk "Find gitconfig file")
+     "g F" '(magit-fetch :wk "Git fetch")
+     "g g" '(magit-status :wk "Magit status")
+     "g i" '(magit-init :wk "Initialize git repo")
+     "g l" '(magit-log-buffer-file :wk "Magit buffer log")
+     "g r" '(vc-revert :wk "Git revert file")
+     "g s" '(magit-stage-file :wk "Git stage file")
+     "g t" '(git-timemachine :wk "Git time machine")
+     "g u" '(magit-unstage-file :wk "Git unstage file"))
+     
+ (dt/leader-keys
+     "h"   '(:ignore t :wk "Help")
+     "h a" '(counsel-apropos :wk "Apropos")
+     "h b" '(describe-bindings :wk "Describe bindings")
+     "h c" '(describe-char :wk "Describe character under cursor")
+     "h d" '(:ignore t :wk "Emacs documentation")
+     "h d a" '(about-emacs :wk "About Emacs")
+     "h d d" '(view-emacs-debugging :wk "View Emacs debugging")
+     "h d f" '(view-emacs-FAQ :wk "View Emacs FAQ")
+     "h d m" '(info-emacs-manual :wk "The Emacs manual")
+     "h d n" '(view-emacs-news :wk "View Emacs news")
+     "h d o" '(describe-distribution :wk "How to obtain Emacs")
+     "h d p" '(view-emacs-problems :wk "View Emacs problems")
+     "h d t" '(view-emacs-todo :wk "View Emacs todo")
+     "h d w" '(describe-no-warranty :wk "Describe no warranty")
+     "h e" '(view-echo-area-messages :wk "View echo area messages")
+     "h f" '(describe-function :wk "Describe function")
+     "h F" '(describe-face :wk "Describe face")
+     "h g" '(describe-gnu-project :wk "Describe GNU Project")
+     "h i" '(info :wk "Info")
+     "h I" '(describe-input-method :wk "Describe input method")
+     "h k" '(describe-key :wk "Describe key")
+     "h l" '(view-lossage :wk "Display recent keystrokes and the commands run")
+     "h L" '(describe-language-environment :wk "Describe language environment")
+     "h m" '(describe-mode :wk "Describe mode")
+     "h r" '(:ignore t :wk "Reload")
+     "h r r" '((lambda () (interactive)
+              (load-file "~/.config/emacs/init.el")
+              (ignore (elpaca-process-queues)))
+              :wk "Reload emacs config")
+     "h t" '(load-theme :wk "Load theme")
+     "h v" '(describe-variable :wk "Describe variable")
+     "h w" '(where-is :wk "Prints keybinding for command if set")
+     "h x" '(describe-command :wk "Display full documentation for command"))
+
+ (dt/leader-keys
+     "m"   '(:ignore t :wk "Org")
+     "m a" '(org-agenda :wk "Org agenda")
+     "m e" '(org-export-dispatch :wk "Org export dispatch")
+     "m i" '(org-toggle-item :wk "Org toggle item")
+     "m t" '(org-todo :wk "Org todo")
+     "m B" '(org-babel-tangle :wk "Org babel tangle")
+     "m T" '(org-todo-list :wk "Org todo list"))
+
+ (dt/leader-keys
+     "m b" '(:ignore t :wk "Tables")
+     "m b -" '(org-table-insert-hline :wk "Insert hline in table"))
+
+ (dt/leader-keys
+     "m d" '(:ignore t :wk "Date/deadline")
+     "m d t" '(org-time-stamp :wk "Org time stamp"))
+
+ (dt/leader-keys
+     "o"   '(:ignore t :wk "Open")
+     "o d" '(dashboard-open :wk "Dashboard")
+     "o e" '(elfeed :wk "Elfeed RSS")
+     "o f" '(make-frame :wk "Open buffer in new frame")
+     "o F" '(select-frame-by-name :wk "Select frame by name")
+     "o p" '(pdf-view-mode :wk "Open PDF"))
 
 
-   (dt/leader-keys
-       "p"   '(:ignore t :wk "Python")
-       "p v" '(pyvenv-activate :wk "Set python .venv"))
+ (dt/leader-keys
+     "p"   '(:ignore t :wk "Python")
+     "p v" '(pyvenv-activate :wk "Set python .venv"))
 
-   (dt/leader-keys
-       "s"   '(:ignore t :wk "Search")
-       "s d" '(dictionary-search :wk "Search dictionary")
-       "s m" '(man :wk "Man pages")
-       "s t" '(tldr :wk "Lookup TLDR docs for a command")
-       "s w" '(woman :wk "Similar to man but doesn't require man"))
+ (dt/leader-keys
+     "s"   '(:ignore t :wk "Search")
+     "s d" '(dictionary-search :wk "Search dictionary")
+     "s m" '(man :wk "Man pages")
+     "s t" '(tldr :wk "Lookup TLDR docs for a command")
+     "s w" '(woman :wk "Similar to man but doesn't require man"))
 
 
 
-   (dt/leader-keys
-       "t"   '(:ignore t :wk "Toggle")
-       "t e" '(eshell-toggle :wk "Toggle eshell")
-       "t f" '(flycheck-mode :wk "Toggle flycheck")
-       "t l" '(display-line-numbers-mode :wk "Toggle line numbers")
-       "t n" '(neotree-toggle :wk "Toggle neotree file viewer")
-       "t o" '(org-mode :wk "Toggle org mode")    
-       "t r" '(rainbow-mode :wk "Toggle rainbow mode")
-       "t t" '(visual-line-mode :wk "Toggle truncated lines")
-       "t v" '(vterm-toggle :wk "Toggle vterm"))
+ (dt/leader-keys
+     "t"   '(:ignore t :wk "Toggle")
+     "t e" '(eshell-toggle :wk "Toggle eshell")
+     "t f" '(flycheck-mode :wk "Toggle flycheck")
+     "t l" '(display-line-numbers-mode :wk "Toggle line numbers")
+     "t n" '(neotree-toggle :wk "Toggle neotree file viewer")
+     "t o" '(org-mode :wk "Toggle org mode")    
+     "t r" '(rainbow-mode :wk "Toggle rainbow mode")
+     "t t" '(visual-line-mode :wk "Toggle truncated lines")
+     "t v" '(vterm-toggle :wk "Toggle vterm"))
 
-   (dt/leader-keys
-       "w"   '(:ignore t :wk "Windows")
-       ;; Window splits
-       "w c" '(evil-window-delete :wk "Close window")
-       "w n" '(evil-window-new :wk "New window")
-       "w s" '(evil-window-split :wk "Horizontal split window")
-       "w v" '(evil-window-vsplit :wk "Vertical split window")
-       ;; Window motions
-       "w h" '(evil-window-left :wk "Window left")
-       "w j" '(evil-window-down :wk "Window down")
-       "w k" '(evil-window-up :wk "Window up")
-       "w l" '(evil-window-right :wk "Window right")
-       "w w" '(evil-window-next :wk "Goto next window")
-       ;; Move Windows
-       "w H" '(buf-move-left :wk "Buffer move left")
-       "w J" '(buf-move-down :wk "Buffer move down")
-       "w K" '(buf-move-up :wk "Buffer move up")
-       "w L" '(buf-move-right :wk "Buffer move right"))
+ (dt/leader-keys
+     "w"   '(:ignore t :wk "Windows")
+     ;; Window splits
+     "w c" '(evil-window-delete :wk "Close window")
+     "w n" '(evil-window-new :wk "New window")
+     "w s" '(evil-window-split :wk "Horizontal split window")
+     "w v" '(evil-window-vsplit :wk "Vertical split window")
+     ;; Window motions
+     "w h" '(evil-window-left :wk "Window left")
+     "w j" '(evil-window-down :wk "Window down")
+     "w k" '(evil-window-up :wk "Window up")
+     "w l" '(evil-window-right :wk "Window right")
+     "w w" '(evil-window-next :wk "Goto next window")
+     ;; Move Windows
+     "w H" '(buf-move-left :wk "Buffer move left")
+     "w J" '(buf-move-down :wk "Buffer move down")
+     "w K" '(buf-move-up :wk "Buffer move up")
+     "w L" '(buf-move-right :wk "Buffer move right"))
 
-       )
+     )
 
-   (elpaca-wait)
-   
+ (elpaca-wait)
+ 
 
 #+end_src
 
@@ -646,12 +795,86 @@ Magit is a full-featured git client for Emacs. For some reason, this wouldn't in
 
 #+begin_src emacs-lisp
 (use-package magit
-  :ensure t)
-  
+  :ensure t
+  :custom
+  (magit-diff-refine-hunk 'all)
+  (magit-save-repository-buffers 'dontask))
 #+end_src
 
 #+begin_src emacs-lisp
 (elpaca-wait)
+#+end_src
+
+* gptel 
+gptel~ is a simple, no-frills Large Language Model (LLM) client for
+Emacs. It lets you chat with models like ChatGPT, Claude, Gemini, and
+local models (Ollama, llama.cpp) directly from any Emacs buffer.
+
+Unlike heavier "AI assistant" packages, gptel treats LLM interaction
+as plain text in ordinary buffers. You can send a region, the buffer
+above point, or a dedicated chat buffer — and the response is just
+inserted as text you can edit, save, and version-control.
+#+begin_src elisp
+(use-package gptel
+  :ensure t
+  :init
+  (setq auth-sources (list (expand-file-name "~/.authinfo")))
+  :config
+  (setq gptel-default-mode 'org-mode)
+  (setq gptel-prompt-prefix-alist
+        '((markdown-mode . "### ")
+          (org-mode      . "*** ")
+          (text-mode     . "### ")))
+
+  ;; Backend
+  (setq gptel-backend
+        (gptel-make-openai "CBorg"
+          :host "api.cborg.lbl.gov"
+          :endpoint "/v1/chat/completions"
+          :stream t
+          :key (lambda ()
+                 (auth-source-pick-first-password
+                  :host "api.cborg.lbl.gov"
+                  :user "apikey"))
+          :models '("gpt-oss-120b-high"
+                    "gemma-4-thinking"
+                    "claude-sonnet-high"
+                    "claude-opus-4-7"
+                    "gpt-4o"
+                    "gpt-4.1"
+                    "gemini-3.1-pro")))
+
+  (setq gptel-directives
+        '((default    . "You are a helpful assistant. Be concise.")
+          (programmer . "You are a terse expert programmer. Prefer working code over prose. No preamble, no apologies.")
+          (writer     . "You are a careful editor. Tighten prose without changing meaning or voice.")
+          (explainer  . "Explain concepts clearly with one concrete example. Assume technical literacy.")
+          (shell      . "Reply with a single shell command and nothing else. No code fences, no explanation.")
+          (commit     . "Write a concise git commit message in imperative mood. First line under 60 chars.")))
+
+  ;; Load presets file (must define presets with gptel-make-preset)
+  (let ((presets-file (expand-file-name "lisp/gptel-presets.el" user-emacs-directory)))
+    (when (file-exists-p presets-file)
+      (load presets-file)))
+
+  (gptel--apply-preset 'free-basic)
+
+  ;; Keybindings
+  (define-key gptel-mode-map (kbd "C-<return>") #'gptel-send)
+
+  (with-eval-after-load 'evil
+    (evil-define-key 'normal gptel-mode-map
+      (kbd "RET") #'gptel-send
+      (kbd "gm")  #'gptel-menu
+      (kbd "gr")  #'gptel-rewrite)
+    (evil-define-key 'visual gptel-mode-map
+      (kbd "RET") #'gptel-send)))
+
+(defun my/reload-gptel-presets ()
+  "Reload `gptel-presets.el`."
+  (interactive)
+  (load-file (expand-file-name "lisp/gptel-presets.el" user-emacs-directory))
+  (message "gptel presets reloaded"))
 #+end_src
 
 * Ivy(Council)
@@ -1025,7 +1248,7 @@ The following settings are simple modes that are enabled (or disabled) so that E
 (scroll-bar-mode -1)         ;; Disable the scroll bar
 (tool-bar-mode -1)           ;; Disable the tool bar
 (setq org-edit-src-content-indentation 0) ;; Set src block automatic indent to 0 instead of 2.
-  
+
 #+end_src
 
 * Shells and Terminals

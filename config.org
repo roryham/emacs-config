@@ -1123,6 +1123,7 @@ Org-tempo is not a separate package but a module within org that can be enabled.
 #+begin_src emacs-lisp
 (use-package pdf-tools
   :ensure t
+  :defer t
   :mode ("\\.pdf\\'" . pdf-view-mode)
   :init
   (setq pdf-view-use-scaling t

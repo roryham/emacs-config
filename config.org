@@ -1,4 +1,3 @@
-#+AUTHOR: Rory Hamaoka
 #+DESCRIPTION: RH's emacs config
 #+STARTUP: showeverything
 #+OPTIONS: toc:t
@@ -9,6 +8,7 @@
   - [[#adding-the-scripts-directory-to-path][Adding the scripts directory to path]]
   - [[#sourcing-the-scripts][Sourcing the scripts]]
 - [[#apps-script-development][Apps Script Development]]
+  - [[#markdown][Markdown]]
   - [[#javascript-mode-for-gs-and-js-files][JavaScript Mode for .gs and .js files]]
   - [[#lsp-for-javascript--apps-script][LSP for JavaScript / Apps Script]]
   - [[#clasp-integration][Clasp Integration]]
@@ -34,7 +34,6 @@
 - [[#ivycouncil][Ivy(Council)]]
 - [[#language-support][Language Support]]
   - [[#pyenv][Pyenv]]
-- [[#markdown][Markdown]]
 - [[#melpa][Melpa]]
 - [[#minibuffer-escape][Minibuffer Escape]]
 - [[#modeline][Modeline]]
@@ -77,6 +76,14 @@
 * Apps Script Development
 Configuration for round-trip Google Apps Script development using clasp,
 js2-mode, LSP, and AI assistance via Claude Code in vterm.
+
+** Markdown
+#+begin_src emacs-lisp
+(use-package markdown-mode
+  
+  :mode ("\\.md\\'" . markdown-mode))
+
+#+end_src
 
 ** JavaScript Mode for .gs and .js files
 Apps Script files use .gs extension on Google's side but .js locally
@@ -946,6 +953,12 @@ Emacs has built-in programming language modes for Lisp, Scheme, DSSSL, Ada, ASM,
 
 #+end_src
 
+#+begin_src emacs-lisp
+(use-package yaml-mode
+  :ensure t
+  :mode ("\\.yml\\'" "\\.yaml\\'"))
+
+#+end_src
 
 
 ** Pyenv
@@ -956,18 +969,9 @@ Emacs helper package to make Emacs aware of a virtual enviroment. Once Emacs kno
 
 #+end_src
 
-* Markdown
-#+begin_src emacs-lisp
-(use-package markdown-mode
-  :ensure t
-  :mode ("\\.md\\ . markdown-mode"))
-
-#+end_src
-
-
 * Melpa
 MELPA (Milkypostman’s Emacs Lisp Package Archive) is one of the main package repositories for Emacs. Think of it as an “app store” for Emacs Lisp packages. 
-#+begin_src 
+#+begin_src emacs-lisp 
 (require 'package)
 
 ;; Add MELPA repository

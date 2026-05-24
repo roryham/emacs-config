@@ -51,7 +51,8 @@
 ;; llama, magit, etc.) now require compat >= 31. Installing it here
 ;; ensures it's available before any dependent package is built.
 (unless (alist-get 'compat (elpaca--queued))
-  (elpaca compat))
-(elpaca-wait)
+  (elpaca compat)
+  (elpaca-wait))
+
 (provide 'elpaca-setup)
 ;;; elpaca-setup.el ends here

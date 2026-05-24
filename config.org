@@ -70,10 +70,6 @@
 (add-to-list 'load-path "~/.config/emacs/scripts/")
 #+end_src
 
-#+begin_src emacs-lisp
-(use-package compat :ensure t)
-(elpaca-wait) ;The elpaca-wait ensures compat is built and loaded before any other package tries to use it.
-#+end_src
 
 
 ** Sourcing the scripts

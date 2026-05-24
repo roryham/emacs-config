@@ -989,7 +989,7 @@ By default, Emacs requires you to hit ESC three times to escape quit the minibuf
 * Modeline
 The modeline is the bottom status bar that appears in Emacs windows.  While you can create your own custom modeline, why go to the trouble when Doom Emacs already has a nice modeline package available.  For more information on what is available to configure in the Doom modeline, check out: Doom Modeline
 #+begin_src emacs-lisp
-(setq nerd-icons-scale-factor 2.5)
+(setq nerd-icons-scale-factor 1.6)
 
 (use-package doom-modeline
   :ensure t

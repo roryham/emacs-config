@@ -12,7 +12,6 @@
   - [[#javascript-mode-for-gs-and-js-files][JavaScript Mode for .gs and .js files]]
   - [[#lsp-for-javascript--apps-script][LSP for JavaScript / Apps Script]]
   - [[#clasp-integration][Clasp Integration]]
-- [[#all-the-icons][All the icons]]
 - [[#backup][Backup]]
 - [[#buffer-move][Buffer move]]
 - [[#claude-code][Claude Code]]
@@ -38,6 +37,7 @@
 - [[#minibuffer-escape][Minibuffer Escape]]
 - [[#modeline][Modeline]]
 - [[#neotree][Neotree]]
+- [[#nerd-icons][Nerd icons]]
 - [[#org-mode][Org Mode]]
   - [[#diminish-org-indent-mod][Diminish Org Indent Mod]]
   - [[#org-download][Org-download]]
@@ -191,18 +191,6 @@ If ASYNC is non-nil, run as async-shell-command in BUFFER-NAME."
   (rh/clasp-in-project "clasp status"))
 #+end_src
 
-* All the icons
-This is an icon set that can be used with dashboard, dired, ibuffer and other Emacs programs.
-#+begin_src emacs-lisp
-(use-package nerd-icons
-  :ensure t
-  :if (display-graphic-p))
-
-(use-package nerd-icons-dired
-  :ensure t
-  :hook (dired-mode . nerd-icons-dired-mode)) 
-
-#+end_src
 
  
 * Backup
@@ -1001,6 +989,8 @@ By default, Emacs requires you to hit ESC three times to escape quit the minibuf
 * Modeline
 The modeline is the bottom status bar that appears in Emacs windows.  While you can create your own custom modeline, why go to the trouble when Doom Emacs already has a nice modeline package available.  For more information on what is available to configure in the Doom modeline, check out: Doom Modeline
 #+begin_src emacs-lisp
+(setq nerd-icons-scale-factor 2.5)
+
 (use-package doom-modeline
   :ensure t
   :init (doom-modeline-mode 1)
@@ -1008,7 +998,11 @@ The modeline is the bottom status bar that appears in Emacs windows.  While you 
   (setq doom-modeline-height 35      ;; sets modeline height
         doom-modeline-bar-width 5    ;; sets right bar width
         doom-modeline-persp-name t   ;; adds perspective name to modeline
-        doom-modeline-persp-icon t)) ;; adds folder icon next to persp name
+        doom-modeline-persp-icon t) ;; adds folder icon next to persp name
+  (set-face-attribute 'mode-line nil :height 150) ;;lkj
+  (set-face-attribute 'mode-line-inactive nil :height 150) 
+  (set-face-attribute 'doom-modeline nil :height 150))
+;;  (set-face-attribute 'doom-modeline-inactive nil :height 160))
 #+end_src
 
 * Neotree
@@ -1039,6 +1033,19 @@ Neotree is a file tree viewer.  When you open neotree, it jumps to the current f
 
 #+end_src
 
+* Nerd icons
+This is an icon set that can be used with dashboard, dired, ibuffer and other Emacs programs. In order for these icons to display correctly you need to run 
+M-x nerd-icons-install-fonts
+#+begin_src emacs-lisp
+(use-package nerd-icons
+  :ensure t)
+
+(use-package nerd-icons-dired
+  :ensure t
+  :after nerd-icons
+  :hook (dired-mode . nerd-icons-dired-mode)) 
+
+#+end_src
 
 
 * Org Mode

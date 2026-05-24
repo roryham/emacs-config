@@ -1,0 +1,300 @@
+#+TITLE: gptel Tool Definitions
+#+AUTHOR: You
+#+PROPERTY: header-args:emacs-lisp :tangle gptel-tools.el :mkdirp yes :comments link
+
+* Auto-Tangle (Babel) on Save
+* Header & requires
+:PROPERTIES:
+:header-args:emacs-lisp+: :tangle gptel-tools.el
+:END:
+
+#+begin_src emacs-lisp
+;;; gptel-tools.el --- Tool definitions for gptel  -*- lexical-binding: t; -*-
+;;
+;; AUTO-GENERATED from gptel-tools.org -- do not edit directly.
+;; Edit the .org file and tangle with C-c C-v t.
+
+(require 'gptel)
+(require 'org)
+(require 'org-element)
+#+end_src
+
+* Emacs / buffer tools
+** current_buffer
+Return the contents of the most recent non-chat buffer the user was working in.
+
+#+begin_src emacs-lisp
+(gptel-make-tool
+ :name "current_buffer"
+ :function (lambda ()
+             (with-current-buffer (other-buffer (current-buffer) t)
+               (buffer-substring-no-properties (point-min) (point-max))))
+ :description "Return the contents of the user's current buffer (not the gptel chat buffer)."
+ :args nil
+ :category "emacs")
+#+end_src
+
+** list_buffers
+List visible (non-internal) buffer names.
+
+#+begin_src emacs-lisp
+(gptel-make-tool
+ :name "list_buffers"
+ :function (lambda ()
+             (mapconcat #'buffer-name
+                        (seq-filter (lambda (b)
+                                      (not (string-prefix-p " " (buffer-name b))))
+                                    (buffer-list))
+                        "\n"))
+ :description "List all visible buffer names."
+ :args nil
+ :category "emacs")
+#+end_src
+
+* Filesystem tools
+** read_file
+#+begin_src emacs-lisp
+(gptel-make-tool
+ :name "read_file"
+ :function (lambda (path)
+             (with-temp-buffer
+               (insert-file-contents (expand-file-name path))
+               (buffer-string)))
+ :description "Read and return the full contents of a file."
+ :args (list '(:name "path"
+               :type string
+               :description "Absolute or ~-expanded path to the file."))
+ :category "filesystem")
+#+end_src
+
+** list_directory
+#+begin_src emacs-lisp
+(gptel-make-tool
+ :name "list_directory"
+ :function (lambda (path)
+             (mapconcat #'identity
+                        (directory-files (expand-file-name path) nil "^[^.]")
+                        "\n"))
+ :description "List non-hidden files and directories in a directory."
+ :args (list '(:name "path"
+               :type string
+               :description "Directory path."))
+ :category "filesystem")
+#+end_src
+
+* Org-mode tools
+** Helper: resolve Org buffer
+Used by all Org tools to accept a file path, buffer name, or empty string.
+
+#+begin_src emacs-lisp
+(defun my/gptel--resolve-org-buffer (target)
+  "Resolve TARGET to a live Org buffer.
+TARGET may be a file path, a buffer name, or nil (= current buffer)."
+  (cond
+   ((or (null target) (string-empty-p target))
+    (current-buffer))
+   ((get-buffer target))
+   ((file-exists-p (expand-file-name target))
+    (find-file-noselect (expand-file-name target)))
+   (t (error "Cannot resolve Org target: %s" target))))
+#+end_src
+
+** org_current_subtree
+Read the subtree at point in the user's last-visited Org buffer.
+
+#+begin_src emacs-lisp
+(gptel-make-tool
+ :name "org_current_subtree"
+ :function (lambda ()
+             (with-current-buffer (other-buffer (current-buffer) t)
+               (unless (derived-mode-p 'org-mode)
+                 (error "Current buffer is not in org-mode"))
+               (save-excursion
+                 (org-back-to-heading t)
+                 (buffer-substring-no-properties
+                  (point)
+                  (progn (org-end-of-subtree t t) (point))))))
+ :description "Return the full text of the Org subtree at point in the user's current buffer (including the heading and all children)."
+ :args nil
+ :category "org")
+#+end_src
+
+** org_list_headings
+#+begin_src emacs-lisp
+(gptel-make-tool
+ :name "org_list_headings"
+ :function (lambda (target)
+             (with-current-buffer (my/gptel--resolve-org-buffer target)
+               (org-with-wide-buffer
+                (goto-char (point-min))
+                (let (headings)
+                  (org-map-entries
+                   (lambda ()
+                     (push (format "%s %s"
+                                   (make-string (org-current-level) ?*)
+                                   (org-get-heading t t t t))
+                           headings)))
+                  (mapconcat #'identity (nreverse headings) "\n")))))
+ :description "List all headings (with their level) in an Org file or buffer."
+ :args (list '(:name "target"
+               :type string
+               :description "File path, buffer name, or empty string for the user's current buffer."))
+ :category "org")
+#+end_src
+
+** org_read_heading
+#+begin_src emacs-lisp
+(gptel-make-tool
+ :name "org_read_heading"
+ :function (lambda (target heading)
+             (with-current-buffer (my/gptel--resolve-org-buffer target)
+               (org-with-wide-buffer
+                (goto-char (point-min))
+                (if (re-search-forward
+                     (format org-complex-heading-regexp-format
+                             (regexp-quote heading))
+                     nil t)
+                    (progn
+                      (org-back-to-heading t)
+                      (buffer-substring-no-properties
+                       (point)
+                       (progn (org-end-of-subtree t t) (point))))
+                  (error "Heading not found: %s" heading)))))
+ :description "Return the full subtree (heading + body + children) of the first heading matching HEADING in TARGET."
+ :args (list '(:name "target"
+               :type string
+               :description "File path, buffer name, or empty string for current buffer.")
+             '(:name "heading"
+               :type string
+               :description "Exact heading text to look up (without leading asterisks)."))
+ :category "org")
+#+end_src
+
+** org_insert_under_heading
+Write tool — prompts for confirmation before inserting.
+
+#+begin_src emacs-lisp
+(gptel-make-tool
+ :name "org_insert_under_heading"
+ :function (lambda (target heading content)
+             (with-current-buffer (my/gptel--resolve-org-buffer target)
+               (org-with-wide-buffer
+                (goto-char (point-min))
+                (if (re-search-forward
+                     (format org-complex-heading-regexp-format
+                             (regexp-quote heading))
+                     nil t)
+                    (progn
+                      (org-back-to-heading t)
+                      (org-end-of-meta-data t)
+                      (insert content)
+                      (unless (bolp) (insert "\n"))
+                      (format "Inserted %d chars under %S in %s"
+                              (length content) heading (buffer-name)))
+                  (error "Heading not found: %s" heading)))))
+ :description "Insert CONTENT under the first heading matching HEADING in TARGET (after any property drawer)."
+ :args (list '(:name "target"
+               :type string
+               :description "File path, buffer name, or empty string for current buffer.")
+             '(:name "heading"
+               :type string
+               :description "Exact heading text.")
+             '(:name "content"
+               :type string
+               :description "Text to insert. Include Org markup as needed."))
+ :category "org"
+ :confirm t)
+#+end_src
+
+** org_insert_src_block
+#+begin_src emacs-lisp
+(gptel-make-tool
+ :name "org_insert_src_block"
+ :function (lambda (target heading language code)
+             (with-current-buffer (my/gptel--resolve-org-buffer target)
+               (org-with-wide-buffer
+                (goto-char (point-min))
+                (if (re-search-forward
+                     (format org-complex-heading-regexp-format
+                             (regexp-quote heading))
+                     nil t)
+                    (progn
+                      (org-back-to-heading t)
+                      (org-end-of-meta-data t)
+                      (insert (format "#+begin_src %s\n%s\n#+end_src\n"
+                                      language
+                                      (string-trim-right code)))
+                      (format "Inserted %s src block under %S" language heading))
+                  (error "Heading not found: %s" heading)))))
+ :description "Insert an Org source block (#+begin_src LANGUAGE … #+end_src) under HEADING in TARGET."
+ :args (list '(:name "target"
+               :type string
+               :description "File path, buffer name, or empty string for current buffer.")
+             '(:name "heading"
+               :type string
+               :description "Exact heading text.")
+             '(:name "language"
+               :type string
+               :description "Source block language, e.g. \"emacs-lisp\", \"python\", \"shell\".")
+             '(:name "code"
+               :type string
+               :description "Code to put inside the block."))
+ :category "org"
+ :confirm t)
+#+end_src
+
+** org_search
+Uses ripgrep if available, falls back to grep.
+
+#+begin_src emacs-lisp
+(gptel-make-tool
+ :name "org_search"
+ :function (lambda (query directory)
+             (let ((dir (expand-file-name (if (string-empty-p directory)
+                                              org-directory
+                                            directory))))
+               (with-temp-buffer
+                 (let ((default-directory dir))
+                   (if (executable-find "rg")
+                       (call-process "rg" nil t nil
+                                     "--no-heading" "--line-number"
+                                     "--glob" "*.org" query)
+                     (call-process "grep" nil t nil
+                                   "-rn" "--include=*.org" query ".")))
+                 (buffer-string))))
+ :description "Search Org files for QUERY (plain string). Returns matching file:line:text rows."
+ :args (list '(:name "query"
+               :type string
+               :description "Search string (literal, not regex unless your tool supports it).")
+             '(:name "directory"
+               :type string
+               :description "Directory to search. Empty string uses `org-directory'."))
+ :category "org")
+#+end_src
+
+* Shell tools
+:PROPERTIES:
+:CUSTOM_ID: shell
+:END:
+
+⚠ These execute arbitrary commands. Each has =:confirm t=.
+
+** run_shell_command
+#+begin_src emacs-lisp
+(gptel-make-tool
+ :name "run_shell_command"
+ :function (lambda (command)
+             (shell-command-to-string command))
+ :description "Run a shell command and return its stdout. Use with caution."
+ :args (list '(:name "command"
+               :type string
+               :description "Shell command to execute."))
+ :category "shell"
+ :confirm t)
+#+end_src
+
+* Footer
+#+begin_src emacs-lisp
+(provide 'gptel-tools)
+#+end_src
+;;; gptel

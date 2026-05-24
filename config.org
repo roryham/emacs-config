@@ -33,6 +33,7 @@
 - [[#ivycouncil][Ivy(Council)]]
 - [[#language-support][Language Support]]
   - [[#pyenv][Pyenv]]
+- [[#mcp-model-context-protocol][MCP (Model Context Protocol)]]
 - [[#melpa][Melpa]]
 - [[#minibuffer-escape][Minibuffer Escape]]
 - [[#modeline][Modeline]]
@@ -454,7 +455,8 @@ Evil is an extensible vi/vim layer for Emacs.  Because…let’s face it.  The V
    (with-eval-after-load 'evil-maps
      (define-key evil-motion-state-map (kbd "SPC") nil)
      (define-key evil-motion-state-map (kbd "RET") nil)
-     (define-key evil-motion-state-map (kbd "TAB") nil))
+     (define-key evil-motion-state-map (kbd "TAB") nil)
+     (add-to-list 'evil-emacs-state-modes 'mcp-hub-mode))
    ;; Setting RETURN key in org-mode to follow links
      (setq org-return-follows-link  t)
 
@@ -812,14 +814,25 @@ inserted as text you can edit, save, and version-control.
 #+begin_src elisp
 (use-package gptel
   :ensure t
+  ;; Defer config until MCP is loaded, so `my/ensure-project-mcp-memory'
+  ;; (defined in the MCP block) is available when we advise gptel below.
+  :after mcp
   :init
   (setq auth-sources (list (expand-file-name "~/.authinfo")))
   :config
+  ;; Always show the expanded tool menu with descriptions
+  (setq gptel-tool-menu-flatten t) ;; Always show the expanded tool menu with descriptions
+  (setq transient-default-level 7)  ;; Show all transient options at max detai
   (setq gptel-default-mode 'org-mode)
   (setq gptel-prompt-prefix-alist
         '((markdown-mode . "### ")
           (org-mode      . "*** ")
           (text-mode     . "### ")))
+
+  ;; Enable tool calling globally so MCP-provided tools (memory server,
+  ;; etc.) are usable. Per-buffer selection still happens via
+  ;; `M-x gptel-tools'.
+  (setq gptel-use-tools t)
 
   ;; Backend
   (setq gptel-backend
@@ -827,7 +840,8 @@ inserted as text you can edit, save, and version-control.
           :host "api.cborg.lbl.gov"
           :endpoint "/v1/chat/completions"
           :stream t
-          :key (lambda ()
+         ;; :capabilities '(tool-use)
+	  :key (lambda ()
                  (auth-source-pick-first-password
                   :host "api.cborg.lbl.gov"
                   :user "apikey"))
@@ -839,6 +853,8 @@ inserted as text you can edit, save, and version-control.
                     "gpt-4.1"
                     "gemini-3.1-pro")))
 
+
+ 
   (setq gptel-directives
         '((default    . "You are a helpful assistant. Be concise.")
           (programmer . "You are a terse expert programmer. Prefer working code over prose. No preamble, no apologies.")
@@ -854,6 +870,36 @@ inserted as text you can edit, save, and version-control.
 
   (gptel--apply-preset 'free-basic)
 
+  ;; Losd tools file
+  (let ((tools-file (expand-file-name "lisp/gptel-tools.el" user-emacs-directory)))
+    (when (file-exists-p tools-file)
+      (load tools-file)))
+
+
+  ;; ----------------------------------------------------------------
+  ;; MCP project-memory: lazy startup
+  ;; ----------------------------------------------------------------
+  ;; The global memory MCP server is started at init from the MCP
+  ;; block. Project-local memory servers, however, are spun up on
+  ;; demand to avoid spawning an `npx' process for every project we
+  ;; visit. We hook into gptel's normal entry points so the project
+  ;; server is started (and its tools registered) the first time you
+  ;; actually invoke gptel inside a project.
+  ;;
+  ;; `my/ensure-project-mcp-memory' is defined in the MCP config; it
+  ;; is a no-op when not inside a project, or when the current
+  ;; project's server is already running.
+  (advice-add 'gptel-send :before
+              (lambda (&rest _)
+                (when (fboundp 'my/ensure-project-mcp-memory)
+                  (my/ensure-project-mcp-memory))))
+
+  (advice-add 'gptel-menu :before
+              (lambda (&rest _)
+                (when (fboundp 'my/ensure-project-mcp-memory)
+                  (my/ensure-project-mcp-memory))))
+
+
   ;; Keybindings
   (define-key gptel-mode-map (kbd "C-<return>") #'gptel-send)
 
@@ -865,12 +911,28 @@ inserted as text you can edit, save, and version-control.
     (evil-define-key 'visual gptel-mode-map
       (kbd "RET") #'gptel-send)))
 
-(defun my/reload-gptel-presets ()
-  "Reload `gptel-presets.el`."
+
+ ;; Auto-tangle the gptel-tools.org on save
+(defun my/tangle-gptel-tools-on-save ()
+  "Tangle gptel-tools.org when saved."
+  (when (and buffer-file-name
+             (string-equal (file-name-nondirectory buffer-file-name)
+                           "gptel-tools.org"))
+    (org-babel-tangle)))
+
+(add-hook 'after-save-hook #'my/tangle-gptel-tools-on-save)
+
+ ;; Interactive functions - reload referenced config files
+(defun my/reload-gptel-all ()
+  "Reload gptel tools then presets."
   (interactive)
+  (load-file (expand-file-name "lisp/gptel-tools.el" user-emacs-directory))
   (load-file (expand-file-name "lisp/gptel-presets.el" user-emacs-directory))
-  (message "gptel presets reloaded"))
+  (message "gptel tools + presets reloaded"))
+
+
 #+end_src
+
 
 * Ivy(Council)
   Ivy, a generic completion mechanism for Emacs.
@@ -956,6 +1018,173 @@ Emacs helper package to make Emacs aware of a virtual enviroment. Once Emacs kno
   :ensure t)
 
 #+end_src
+
+* MCP (Model Context Protocol)
+#+begin_src emacs-lisp
+;;; -*- lexical-binding: t; -*-
+;;
+;; MCP (Model Context Protocol) configuration.
+;;
+;; Sets up two kinds of memory servers using
+;; @modelcontextprotocol/server-memory:
+;;
+;;   1. A GLOBAL memory server, shared across all of Emacs, started
+;;      once at init time.
+;;   2. A PROJECT-LOCAL memory server, spun up lazily on demand
+;;      (see `my/ensure-project-mcp-memory' below). The lazy trigger
+;;      itself lives in the gptel config, so MCP here has no knowledge
+;;      of gptel's entry points.
+;;
+;; NOTE: server-memory reads its storage path from the MEMORY_FILE_PATH
+;; environment variable, not from a CLI flag.
+
+(use-package mcp
+  :ensure t
+  :custom
+  ;; Register the GLOBAL memory server statically.
+  (mcp-hub-servers
+   `(("global-memory"
+      . (:command "npx"
+         :args    ("-y" "@modelcontextprotocol/server-memory")
+         :env     (:MEMORY_FILE_PATH
+                   ,(expand-file-name "~/.emacs.d/mcp-global-memory.json"))))))
+  :config
+    (require 'mcp-hub)
+    (require 'cl-lib)
+
+    ;; --------------------------------------------------------------
+    ;; Polyfill: `mcp-hub-register-all-tool-to-gptel'
+    ;; --------------------------------------------------------------
+    ;; Some docs and snippets reference a convenience function with
+    ;; this name that automatically registers every MCP-exposed tool
+    ;; with gptel. Our installed version of mcp.el doesn't ship it,
+    ;; but it provides the primitives we need:
+    ;;   - `mcp-hub-get-all-tool' : enumerates (SERVER . TOOL) pairs
+    ;;     across all connected servers.
+    ;;   - `mcp-make-text-tool'   : builds a gptel-compatible spec
+    ;;     for one tool, which we feed to `gptel-make-tool'.
+    ;; We define the helper only if it isn't already provided, so a
+    ;; future upstream version that adds it natively will take
+    ;; precedence automatically.
+   (unless (fboundp 'mcp-hub-register-all-tool-to-gptel)
+  (defun mcp-hub-register-all-tool-to-gptel ()
+    "Register every tool from every connected MCP server with gptel."
+    (interactive)
+    (require 'gptel)
+    (let ((tools (mcp-hub-get-all-tool :asyncp t :categoryp t))
+          (count 0))
+      (dolist (tool tools)
+        (condition-case err
+            (progn (apply #'gptel-make-tool tool)
+                   (cl-incf count))
+          (error (message "Failed to register MCP tool %s: %s"
+                          (plist-get tool :name) err))))
+      (message "Registered %d MCP tools with gptel" count)
+      count))) 
+    ;; Start every server in `mcp-hub-servers' and register their tools
+    ;; with gptel once they're up. If Emacs is still initialising, defer
+    ;; until `after-init-hook'; otherwise (e.g., when this block is
+    ;; re-evaluated interactively or loaded via org-babel after init),
+    ;; fire immediately.
+    ;;
+    ;; A short timer gives the server's stdio handshake time to
+    ;; enumerate tools before we ask gptel to pick them up; without it
+    ;; `mcp-hub-get-all-tool' can return an empty list on first run.
+   (let ((starter
+       (lambda ()
+         (mcp-hub-start-all-server
+          (lambda ()
+            (run-with-timer
+             2 nil
+             (lambda ()
+               (when (fboundp 'mcp-hub-register-all-tool-to-gptel)
+                 (mcp-hub-register-all-tool-to-gptel)
+                 (with-eval-after-load 'gptel
+                   (setq gptel-tools
+                         (cl-remove-duplicates
+                          (append gptel-tools
+                                  (gptel-get-tool '("mcp-global-memory")))
+                          :test #'equal)))))))))))
+  (if after-init-time
+      (funcall starter)
+    (add-hook 'after-init-hook starter))))
+
+;;;----------------------------------------------------------------------
+;;; Project-local memory: lazy startup helpers
+;;;----------------------------------------------------------------------
+
+(defvar my/project-mcp-started nil
+  "List of project roots whose memory MCP server has already been started.
+Used to avoid spawning duplicate processes for the same project.")
+
+(defun my/project-mcp-server-name (proj-root)
+  "Derive a stable, human-readable server name from PROJ-ROOT."
+  (format "project-memory-%s"
+          (file-name-nondirectory (directory-file-name proj-root))))
+
+(defun my/ensure-project-mcp-memory ()
+  "Start a project-local memory MCP server for the current project, if needed.
+
+  Looks up the current project via `project-current'. If found, and we
+  haven't already started a server for that root, registers a new entry
+  in `mcp-hub-servers', launches it, and registers its tools with gptel
+  once the connection is established.
+
+  Safe to call repeatedly: it's a no-op for projects that have already
+  been initialised, and a no-op when not inside a project."
+  (interactive)
+  (when-let* ((proj      (project-current nil))
+              (proj-root (expand-file-name
+                          (if (fboundp 'project-root)
+                              (project-root proj)
+                            (cdr proj)))))
+    (unless (member proj-root my/project-mcp-started)
+      (let* ((server-name   (my/project-mcp-server-name proj-root))
+             (memory-file   (expand-file-name ".mcp-project-memory.json"
+                                              proj-root))
+             (server-config `(:command "npx"
+                              :args    ("-y" "@modelcontextprotocol/server-memory")
+                              :env     (:MEMORY_FILE_PATH ,memory-file))))
+
+        ;; Record this project *before* starting the server, so
+        ;; concurrent calls don't race and double-start.
+        (push proj-root my/project-mcp-started)
+
+        ;; Register the per-project server with the hub so it shows
+        ;; up in `mcp-hub' UI and survives hub restarts.
+        (add-to-list 'mcp-hub-servers (cons server-name server-config))
+
+        ;; Launch it via the hub (same code path used for the global
+        ;; server). `mcp-hub-start-all-server' is a no-op for servers
+        ;; already running, so this only brings up the new one. Once
+        ;; online, refresh gptel's tool registry. A small timer lets
+        ;; the handshake finish before we enumerate tools.
+        (condition-case err
+            (mcp-hub-start-all-server
+             (lambda ()
+               (run-with-timer
+                1 nil
+                (lambda ()
+                  (when (fboundp 'mcp-hub-register-all-tool-to-gptel)
+                    (mcp-hub-register-all-tool-to-gptel))
+                  (message "MCP: project memory server ready for %s"
+                           proj-root)))))
+          (error
+           ;; Roll back the started-list entry so a retry is possible.
+           (setq my/project-mcp-started
+                 (delete proj-root my/project-mcp-started))
+           (signal (car err) (cdr err))))))))
+
+(defun my/reset-project-mcp ()
+  "Forget which projects have had their MCP memory server started.
+Does not stop any running servers; use `mcp-hub' for that."
+  (interactive)
+  (setq my/project-mcp-started nil)
+  (message "Project MCP started-list cleared."))
+#+end_src
+
+
+
 
 * Melpa
 MELPA (Milkypostman’s Emacs Lisp Package Archive) is one of the main package repositories for Emacs. Think of it as an “app store” for Emacs Lisp packages. 

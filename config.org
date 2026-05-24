@@ -70,6 +70,12 @@
 (add-to-list 'load-path "~/.config/emacs/scripts/")
 #+end_src
 
+#+begin_src emacs-lisp
+(use-package compat :ensure t)
+(elpaca-wait) ;The elpaca-wait ensures compat is built and loaded before any other package tries to use it.
+#+end_src
+
+
 ** Sourcing the scripts
 #+begin_src emacs-lisp
 ;; (require 'elpaca-setup)  ;; The elpaca Package Manager
@@ -379,7 +385,7 @@ This package implements hiding or abbreviation of the modeline displays (lighter
 
 * Elfeed
 An RSS newsfeed reader for Emacs.  Move through the articles with ‘j/k’.  Move through the stories with ‘CTRL j/k’ when in other frame.
-#+begin_src emacs-lisp
+#+begin_src emacs-lisp :tangle no
 (use-package elfeed
   :ensure t
   :config

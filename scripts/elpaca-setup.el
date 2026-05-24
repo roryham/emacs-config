@@ -46,5 +46,12 @@
 
 (elpaca-wait)
 
+;; Install a newer `compat' from source before any other package needs it.
+;; Emacs 30.1 ships compat 30.1.9999, but several packages (transient,
+;; llama, magit, etc.) now require compat >= 31. Installing it here
+;; ensures it's available before any dependent package is built.
+(unless (alist-get 'compat (elpaca--queued))
+  (elpaca compat))
+(elpaca-wait)
 (provide 'elpaca-setup)
 ;;; elpaca-setup.el ends here

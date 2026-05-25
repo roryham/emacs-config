@@ -8,8 +8,6 @@
   - [[#adding-the-scripts-directory-to-path][Adding the scripts directory to path]]
   - [[#sourcing-the-scripts][Sourcing the scripts]]
 - [[#apps-script-development][Apps Script Development]]
-  - [[#markdown][Markdown]]
-  - [[#javascript-mode-for-gs-and-js-files][JavaScript Mode for .gs and .js files]]
   - [[#lsp-for-javascript--apps-script][LSP for JavaScript / Apps Script]]
   - [[#clasp-integration][Clasp Integration]]
 - [[#backup][Backup]]
@@ -27,11 +25,16 @@
   - [[#zooming-inout][Zooming In/Out]]
 - [[#general-keybindings][General Keybindings]]
 - [[#git-programs][Git Programs]]
+  - [[#transient][Transient]]
   - [[#git-time-machine][Git Time Machine]]
   - [[#magit][Magit]]
-- [[#gptel][gptel]]
-- [[#ivycouncil][Ivy(Council)]]
+- [[#gptel][Gptel]]
+- [[#ivy-council][Ivy (Council)]]
 - [[#language-support][Language Support]]
+  - [[#c-language][C Language]]
+  - [[#javascript-mode-for-gs-and-js-files][JavaScript Mode for .gs and .js files]]
+  - [[#markdown][Markdown]]
+  - [[#yaml][Yaml]]
   - [[#pyenv][Pyenv]]
 - [[#mcp-model-context-protocol][MCP (Model Context Protocol)]]
 - [[#melpa][Melpa]]
@@ -46,6 +49,7 @@
   - [[#enable-org-bullets][Enable Org Bullets]]
   - [[#org-level-headers][Org Level Headers]]
   - [[#source-code-block-tag-expansion][Source Code Block Tag Expansion]]
+- [[#perspective][Perspective]]
 - [[#pdf-tools-full-setup][PDF Tools Full Setup]]
 - [[#pdf-org-tools][PDF Org Tools]]
 - [[#projectile][Projectile]]
@@ -76,49 +80,13 @@
 #+begin_src emacs-lisp
 ;; (require 'elpaca-setup)  ;; The elpaca Package Manager
 #+end_src
+
 * Apps Script Development
-Configuration for round-trip Google Apps Script development using clasp,
-js2-mode, LSP, and AI assistance via Claude Code in vterm.
-
-** Markdown
-#+begin_src emacs-lisp
-(use-package markdown-mode
-  
-  :mode ("\\.md\\'" . markdown-mode))
-
-#+end_src
-
-** JavaScript Mode for .gs and .js files
-Apps Script files use .gs extension on Google's side but .js locally
-when managed by clasp. js2-mode gives us proper JS syntax handling.
-
-#+begin_src emacs-lisp
-(use-package js2-mode
-  :ensure t
-  :mode (("\\.js\\'" . js2-mode)
-         ("\\.gs\\'" . js2-mode))
-  :hook (js2-mode . (lambda ()
-                      (setq js2-basic-offset 2
-                            js2-strict-missing-semi-warning nil
-                            js2-missing-semi-one-line-override nil)
-                      (flycheck-mode 1)))
-  :config
-  ;; Apps Script globals so js2 doesn't flag them as undefined
-  (setq js2-global-externs
-        '("SpreadsheetApp" "DriveApp" "GmailApp" "DocumentApp"
-          "FormApp" "CalendarApp" "ContactsApp" "GroupsApp"
-          "Logger" "console" "Utilities" "UrlFetchApp"
-          "PropertiesService" "CacheService" "LockService"
-          "Session" "ScriptApp" "HtmlService" "ContentService"
-          "Browser" "MailApp" "LanguageApp" "Maps" "Charts"
-          "XmlService" "Jdbc" "BigQuery" "Drive" "Sheets"
-          "Gmail" "Calendar" "Docs" "Forms" "Slides")))
-#+end_src
+Configuration for round-trip Google Apps Script development using clasp, js2-mode, LSP, and AI assistance via Claude Code in vterm.
 
 ** LSP for JavaScript / Apps Script
-Provides completion, hover docs, and go-to-definition. Requires
-typescript-language-server installed globally:
-  npm install -g typescript typescript-language-server
+Provides completion, hover docs, and go-to-definition. Requires typescript-language-server installed globally:
+npm install -g typescript typescript-language-server
 
 #+begin_src emacs-lisp
 (use-package lsp-mode
@@ -145,8 +113,7 @@ typescript-language-server installed globally:
 #+end_src
 
 ** Clasp Integration
-Wrapper functions for the Google clasp CLI. Run from any file inside
-the project — they use projectile to find the project root.
+Wrapper functions for the Google clasp CLI. Run from any file inside the project — they use projectile to find the project root.
 
 #+begin_src emacs-lisp
 (defun rh/clasp-in-project (cmd &optional buffer-name async)
@@ -193,7 +160,6 @@ If ASYNC is non-nil, run as async-shell-command in BUFFER-NAME."
   (interactive)
   (rh/clasp-in-project "clasp status"))
 #+end_src
-
 
  
 * Backup
@@ -257,9 +223,6 @@ Reads frontmatter values from #+SKILL_NAME and #+SKILL_DESC keywords.
 (add-hook 'after-save-hook #'my/export-claude-skill)
 #+end_src
 
-
-
-
 * Company
 Company is a text completion framework for Emacs. The name stands for “complete anything”.  Completion will start automatically after you type a few letters. Use M-n and M-p to select, <return> to complete or <tab> to complete the common part.
 #+begin_src emacs-lisp
@@ -294,7 +257,7 @@ Emacs Dashboard is an extensible startup screen showing you recent files, bookma
   (setq dashboard-set-file-icons t)
   (setq dashboard-banner-logo-title "Emacs Is More Than A Text Editor!")
   ;;(setq dashboard-startup-banner 'logo) ;; use standard emacs logo as banner
-  (setq dashboard-startup-banner "~/.config/emacs/images/emacs-dash.png")  ;; use custom image as banner
+  (setq dashboard-startup-banner "~/.config/emacs/images/emacs-dash-pixal.png")  ;; use custom image as banner
   (setq dashboard-center-content nil) ;; set to 't' for centered content
   (setq dashboard-items '((recents . 5)
                           (agenda . 5 )
@@ -572,6 +535,7 @@ You can use the bindings CTRL plus =/- for zooming in/out.  You can also use CTR
      "b C" '(clone-indirect-buffer-other-window :wk "Clone indirect buffer in new window")
      "b d" '(bookmark-delete :wk "Delete bookmark")
      "b i" '(ibuffer :wk "Ibuffer")
+     "b j" '(ivy-switch-buffer-other-window :wk "Jump to buffer in other window")
      "b k" '(kill-current-buffer :wk "Kill current buffer")
      "b K" '(kill-some-buffers :wk "Kill multiple buffers")
      "b l" '(list-bookmarks :wk "List bookmarks")
@@ -770,17 +734,19 @@ You can use the bindings CTRL plus =/- for zooming in/out.  You can also use CTR
 #+end_src
 
 * Git Programs
+Magit requires transient. If the installed version of transient is too old, Magit will not load and will throw an error in emacs
+** Transient
 
+#+begin_src emacs-lisp
+(use-package transient
+  :ensure t)
+#+end_src
 
 ** Git Time Machine
 git-timemachine is a program that allows you to move backwards and forwards through a file’s commits.  ‘SPC g t’ will open the time machine on a file if it is in a git repo.  Then, while in normal mode, you can use ‘CTRL-j’ and ‘CTRL-k’ to move backwards and forwards through the commits.
-Magit requires transient. If the installed version of transient is too old, Magit will not load and will throw an error in emacs
-#+begin_src emacs-lisp
-    (use-package transient
-  :ensure t)
-      
 
-    (use-package git-timemachine      
+#+begin_src emacs-lisp
+(use-package git-timemachine      
   :ensure t
       :hook (evil-normalize-keymaps . git-timemachine-hook)
       :config
@@ -804,15 +770,12 @@ Magit is a full-featured git client for Emacs. For some reason, this wouldn't in
 (elpaca-wait)
 #+end_src
 
-* gptel 
-gptel~ is a simple, no-frills Large Language Model (LLM) client for
-Emacs. It lets you chat with models like ChatGPT, Claude, Gemini, and
+* Gptel 
+gptel~ is a simple, no-frills Large Language Model (LLM) client for Emacs. It lets you chat with models like ChatGPT, Claude, Gemini, and
 local models (Ollama, llama.cpp) directly from any Emacs buffer.
 
-Unlike heavier "AI assistant" packages, gptel treats LLM interaction
-as plain text in ordinary buffers. You can send a region, the buffer
-above point, or a dedicated chat buffer — and the response is just
-inserted as text you can edit, save, and version-control.
+Unlike heavier "AI assistant" packages, gptel treats LLM interaction as plain text in ordinary buffers. You can send a region, the buffer
+above point, or a dedicated chat buffer — and the response is just inserted as text you can edit, save, and version-control.
 #+begin_src elisp
 (use-package gptel
   :ensure t
@@ -896,10 +859,8 @@ inserted as text you can edit, save, and version-control.
     (message "gptel: Ollama backend registered for %s" (system-name)))
 
   ;; ----------------------------------------------------------------
-  ;; End of: Local Ollama backend (only on the machine that has it installed)
+  ;; Gptel presets - These are not used anymore
   ;; ----------------------------------------------------------------
-
-
  
   (setq gptel-directives
         '((default    . "You are a helpful assistant. Be concise.")
@@ -909,6 +870,9 @@ inserted as text you can edit, save, and version-control.
           (shell      . "Reply with a single shell command and nothing else. No code fences, no explanation.")
           (commit     . "Write a concise git commit message in imperative mood. First line under 60 chars.")))
 
+  ;; ----------------------------------------------------------------
+  ;; Gptel config files saved elsewhere to load
+  ;; ----------------------------------------------------------------
   ;; Load presets file (must define presets with gptel-make-preset)
   (let ((presets-file (expand-file-name "lisp/gptel-presets.el" user-emacs-directory)))
     (when (file-exists-p presets-file)
@@ -921,19 +885,14 @@ inserted as text you can edit, save, and version-control.
     (when (file-exists-p tools-file)
       (load tools-file)))
 
-
   ;; ----------------------------------------------------------------
-  ;; MCP project-memory: lazy startup
+  ;; MCP project-memory server: lazy startup
   ;; ----------------------------------------------------------------
-  ;; The global memory MCP server is started at init from the MCP
-  ;; block. Project-local memory servers, however, are spun up on
-  ;; demand to avoid spawning an `npx' process for every project we
-  ;; visit. We hook into gptel's normal entry points so the project
-  ;; server is started (and its tools registered) the first time you
-  ;; actually invoke gptel inside a project.
+  ;; The global memory MCP server is started at init from the MCP block. Project-local memory servers, however, are spun up on
+  ;; demand to avoid spawning an `npx' process for every project we visit. We hook into gptel's normal entry points so the project
+  ;; server is started (and its tools registered) the first time you actually invoke gptel inside a project.
   ;;
-  ;; `my/ensure-project-mcp-memory' is defined in the MCP config; it
-  ;; is a no-op when not inside a project, or when the current
+  ;; `my/ensure-project-mcp-memory' is defined in the MCP config; it is a no-op when not inside a project, or when the current
   ;; project's server is already running.
   (advice-add 'gptel-send :before
               (lambda (&rest _)
@@ -945,8 +904,9 @@ inserted as text you can edit, save, and version-control.
                 (when (fboundp 'my/ensure-project-mcp-memory)
                   (my/ensure-project-mcp-memory))))
 
-
-  ;; Keybindings
+  ;; ----------------------------------------------------------------
+  ;; Gptel keybindings
+  ;; ----------------------------------------------------------------
   (define-key gptel-mode-map (kbd "C-<return>") #'gptel-send)
 
   (with-eval-after-load 'evil
@@ -957,7 +917,9 @@ inserted as text you can edit, save, and version-control.
     (evil-define-key 'visual gptel-mode-map
       (kbd "RET") #'gptel-send)))
 
-
+  ;; ----------------------------------------------------------------
+  ;; Gptel custom functions for custom config files and tools saved elsewhere
+  ;; ----------------------------------------------------------------
  ;; Auto-tangle the gptel-tools.org on save
 (defun my/tangle-gptel-tools-on-save ()
   "Tangle gptel-tools.org when saved."
@@ -976,13 +938,11 @@ inserted as text you can edit, save, and version-control.
   (load-file (expand-file-name "lisp/gptel-presets.el" user-emacs-directory))
   (message "gptel tools + presets reloaded"))
 
-
 #+end_src
 
 
-* Ivy(Council)
-  Ivy, a generic completion mechanism for Emacs.
-  Counsel, a collection of Ivy-enhanced versions of common Emacs commands.
+* Ivy (Council)
+  Ivy, a generic completion mechanism for Emacs. Counsel, a collection of Ivy-enhanced versions of common Emacs commands.
   Ivy-rich allows us to add descriptions alongside the commands in M-x.
 #+begin_src emacs-lisp
 (use-package counsel
@@ -1034,6 +994,7 @@ Emacs has built-in programming language modes for Lisp, Scheme, DSSSL, Ada, ASM,
 
 #+end_src
 
+** C Language
 #+begin_src emacs-lisp
 ;; Basic C Programming Setup
 
@@ -1049,12 +1010,51 @@ Emacs has built-in programming language modes for Lisp, Scheme, DSSSL, Ada, ASM,
 
 #+end_src
 
+** JavaScript Mode for .gs and .js files
+Apps Script files use .gs extension on Google's side but .js locally when managed by clasp. js2-mode gives us proper JS syntax handling.
+
+#+begin_src emacs-lisp
+(use-package js2-mode
+  :ensure t
+  :mode (("\\.js\\'" . js2-mode)
+         ("\\.gs\\'" . js2-mode))
+  :hook (js2-mode . (lambda ()
+                      (setq js2-basic-offset 2
+                            js2-strict-missing-semi-warning nil
+                            js2-missing-semi-one-line-override nil)
+                      (flycheck-mode 1)))
+  :config
+  ;; Apps Script globals so js2 doesn't flag them as undefined
+  (setq js2-global-externs
+        '("SpreadsheetApp" "DriveApp" "GmailApp" "DocumentApp"
+          "FormApp" "CalendarApp" "ContactsApp" "GroupsApp"
+          "Logger" "console" "Utilities" "UrlFetchApp"
+          "PropertiesService" "CacheService" "LockService"
+          "Session" "ScriptApp" "HtmlService" "ContentService"
+          "Browser" "MailApp" "LanguageApp" "Maps" "Charts"
+          "XmlService" "Jdbc" "BigQuery" "Drive" "Sheets"
+          "Gmail" "Calendar" "Docs" "Forms" "Slides")))
+#+end_src
+
+** Markdown
+#+begin_src emacs-lisp
+(use-package markdown-mode
+  
+  :mode ("\\.md\\'" . markdown-mode))
+
+#+end_src
+
+
+** Yaml
 #+begin_src emacs-lisp
 (use-package yaml-mode
   :ensure t
   :mode ("\\.yml\\'" "\\.yaml\\'"))
 
 #+end_src
+
+
+
 
 
 ** Pyenv
@@ -1234,9 +1234,6 @@ Does not stop any running servers; use `mcp-hub' for that."
   (message "Project MCP started-list cleared."))
 #+end_src
 
-
-
-
 * Melpa
 MELPA (Milkypostman’s Emacs Lisp Package Archive) is one of the main package repositories for Emacs. Think of it as an “app store” for Emacs Lisp packages. 
 #+begin_src emacs-lisp 
@@ -1355,10 +1352,6 @@ org-download is an Emacs package that makes it super easy to save and insert ima
 
 #+end_src
 
-
-
-
-
 ** Enable Table Of Contents
 #+begin_src emacs-lisp
 (use-package toc-org
@@ -1409,6 +1402,36 @@ Org-tempo is not a separate package but a module within org that can be enabled.
 #+begin_src emacs-lisp
 (require 'org-tempo)
 #+end_src
+
+* Perspective
+Perspective provides multiple named workspaces (or “perspectives”) in Emacs, similar to multiple desktops in window managers.  Each perspective has its own buffer list and its own window layout, along with some other isolated niceties, like the xref ring.
+#+begin_src emacs-lisp
+(use-package perspective
+  :ensure t
+  :demand t
+  :custom
+  (persp-mode-prefix-key (kbd "C-c M-p"))
+  (persp-state-default-file
+   (locate-user-emacs-file "sessions/persp-state.el"))
+  :config
+  (persp-mode 1)
+
+  (defun my/persp-ibuffer-setup ()
+    "Group ibuffer buffers by perspective."
+    (persp-ibuffer-set-filter-groups)
+    (unless (eq ibuffer-sorting-mode 'alphabetic)
+      (ibuffer-do-sort-by-alphabetic)))
+
+  (add-hook 'ibuffer-hook #'my/persp-ibuffer-setup)
+
+  (defun my/persp-save-state-on-exit ()
+    "Save perspective state on exit."
+    (ignore-errors
+      (persp-state-save)))
+
+  (add-hook 'kill-emacs-hook #'my/persp-save-state-on-exit))
+#+end_src
+
 
 * PDF Tools Full Setup
 #+begin_src emacs-lisp
@@ -1753,8 +1776,8 @@ With Emacs version 29, true transparency has been added.  I have turned transpar
 ;; --- Evil + Org keybindings ---
 (with-eval-after-load 'evil
   (evil-define-key 'normal org-mode-map
-    (kbd "p") #'my/org-inline-paste
-    (kbd "C-p") #'evil-paste-after))
+    (kbd "p") #'my/org-inline-paste         ;; Now p   is paste BEFORE point
+    (kbd "C-p") #'evil-paste-after))        ;; Now C-p is paste AFTER point
 
 
 #+end_src
@@ -1797,6 +1820,7 @@ With Emacs version 29, true transparency has been added.  I have turned transpar
   (setq vterm-shell "/bin/bash")
 
 #+end_src
+
 
 
 

@@ -855,6 +855,50 @@ inserted as text you can edit, save, and version-control.
                     "gpt-4.1"
                     "gemini-3.1-pro")))
 
+  ;; ----------------------------------------------------------------
+  ;; Local Ollama backend (only on the machine that has it installed)
+  ;; ----------------------------------------------------------------
+  (defvar my/gptel-ollama-backend nil
+    "Ollama backend, or nil if this machine doesn't run Ollama.")
+
+  ;; Hostname check - matches "XPS15-Rory" exactly, or anything starting with it.
+  (when (string-match-p "\\`XPS15-Rory" (system-name))
+    (setq my/gptel-ollama-backend
+	  (gptel-make-ollama "Ollama"
+	    :host "localhost:11434"
+	    :stream t
+	    ;; Models chosen for GTX 1650 Ti (4GB VRAM).
+	    ;; All are 3B-class so they fit fully in GPU memory at Q4.
+	    :models '(qwen2.5-coder:3b   ;; best small coder, primary choice
+		      quen2.5-coder:7b   ;; larger code, partial CPU offload
+		      qwen2.5:3b         ;; general purpose
+		      llama3.2:3b        ;; Meta's small model
+		      phi3:mini)))       ;; 3.8B, good reasoner
+
+    (gptel-make-preset 'ollama-local
+      :description "Local Ollama on XPS15 (offline, no API cost)"
+      :backend "Ollama"
+      :model 'qwen2.5-coder:3b
+      :system 'programmer)
+
+    (gptel-make-preset 'ollama-chat
+      :description "Local Ollama for general chat"
+      :backend "Ollama"
+      :model 'llama3.2:3b
+      :system 'default)
+
+    (gptel-make-preset 'ollama-coder-big
+      :description "Local Ollama 7B coder (slower, better quality)"
+      :backend "Ollama"
+      :model 'qwen2.5-coder:7b
+      :system 'programmer)
+
+    (message "gptel: Ollama backend registered for %s" (system-name)))
+
+  ;; ----------------------------------------------------------------
+  ;; End of: Local Ollama backend (only on the machine that has it installed)
+  ;; ----------------------------------------------------------------
+
 
  
   (setq gptel-directives
@@ -1049,7 +1093,12 @@ Emacs helper package to make Emacs aware of a virtual enviroment. Once Emacs kno
       . (:command "npx"
          :args    ("-y" "@modelcontextprotocol/server-memory")
          :env     (:MEMORY_FILE_PATH
-                   ,(expand-file-name "~/.emacs.d/mcp-global-memory.json"))))))
+                   ,(expand-file-name "~/.emacs.d/mcp-global-memory.json"))))
+
+     ("searxng"
+      . (:command "npx"
+	  :args    ("-y" "mcp-searxng")
+	  :env     (:SEARXNG_URL "http://localhost:8888")))))
   :config
     (require 'mcp-hub)
     (require 'cl-lib)
@@ -1105,7 +1154,7 @@ Emacs helper package to make Emacs aware of a virtual enviroment. Once Emacs kno
                    (setq gptel-tools
                          (cl-remove-duplicates
                           (append gptel-tools
-                                  (gptel-get-tool '("mcp-global-memory")))
+                                  (gptel-get-tool '("mcp-global-memory"))) ;; auto-enables global ememory tools as defaults in gptel-tools
                           :test #'equal)))))))))))
   (if after-init-time
       (funcall starter)

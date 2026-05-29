@@ -44,6 +44,7 @@
 - [[#nerd-icons][Nerd icons]]
 - [[#org-mode][Org Mode]]
   - [[#diminish-org-indent-mod][Diminish Org Indent Mod]]
+  - [[#org-babel-languages][Org Babel Languages]]
   - [[#org-download][Org-download]]
   - [[#enable-table-of-contents][Enable Table Of Contents]]
   - [[#enable-org-bullets][Enable Org Bullets]]
@@ -1326,10 +1327,27 @@ M-x nerd-icons-install-fonts
 
 
 * Org Mode
+
 ** Diminish Org Indent Mod
 e
 #+begin_src emacs-lisp
 (eval-after-load 'org-indent '(diminish 'org-indent-mode))
+#+end_src
+
+** Org Babel Languages
+Enable evaluation of source blocks in additional languages beyond emacs-lisp.
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'org
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((emacs-lisp . t)
+     (python     . t)
+     (shell      . t)
+     (js         . t)
+     (sql        . t)))
+  ;; Don't prompt before evaluating a source block
+  (setq org-confirm-babel-evaluate nil))
 #+end_src
 
 ** Org-download

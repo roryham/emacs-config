@@ -43,6 +43,7 @@
 - [[#neotree][Neotree]]
 - [[#nerd-icons][Nerd icons]]
 - [[#org-mode][Org Mode]]
+  - [[#babel][Babel]]
   - [[#diminish-org-indent-mod][Diminish Org Indent Mod]]
   - [[#org-babel-languages][Org Babel Languages]]
   - [[#org-download][Org-download]]
@@ -79,7 +80,7 @@
 
 ** Sourcing the scripts
 #+begin_src emacs-lisp
-;; (require 'elpaca-setup)  ;; The elpaca Package Manager
+(require 'elpaca-setup)  ;; The elpaca Package Manager
 #+end_src
 
 * Apps Script Development
@@ -1238,17 +1239,17 @@ Does not stop any running servers; use `mcp-hub' for that."
 * Melpa
 MELPA (Milkypostman’s Emacs Lisp Package Archive) is one of the main package repositories for Emacs. Think of it as an “app store” for Emacs Lisp packages. 
 #+begin_src emacs-lisp 
-(require 'package)
+;;(require 'package)
 
 ;; Add MELPA repository
-(add-to-list 'package-archives
-             '("melpa" . "https://melpa.org/packages/") t)
+;;(add-to-list 'package-archives
+;;             '("melpa" . "https://melpa.org/packages/") t)
 
 ;; Initialize package system
-(package-initialize)
+;;(package-initialize)
 
 ;; Always refresh package list to see latest packages like vterm
-(package-refresh-contents)
+;;(package-refresh-contents)
 
 #+end_src
 
@@ -1327,6 +1328,28 @@ M-x nerd-icons-install-fonts
 
 
 * Org Mode
+
+
+** Babel
+#+begin_src emacs-lisp
+(org-babel-do-load-languages
+ 'org-babel-load-languages
+ '((shell . t))) ;; Enable shell (bash/sh) code blocks
+
+;; Enable JavaScript execution in Org Babel
+(org-babel-do-load-languages
+ 'org-babel-load-languages
+ '((js . t)))    ;; Enable JavaScript execution in Org Babel
+
+;; Tell Org Babel to use Node.js
+(setq org-babel-js-cmd "node")
+
+;; Don't ask for confirmation every time
+;;(setq org-confirm-babel-evaluate nil)
+
+#+end_src
+
+
 
 ** Diminish Org Indent Mod
 e

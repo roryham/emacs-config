@@ -44,7 +44,7 @@
 - [[#nerd-icons][Nerd icons]]
 - [[#org-mode][Org Mode]]
   - [[#babel][Babel]]
-  - [[#diminish-org-indent-mod][Diminish Org Indent Mod]]
+  - [[#diminish-org-indent-mode][Diminish Org Indent Mode]]
   - [[#org-babel-languages][Org Babel Languages]]
   - [[#org-download][Org-download]]
   - [[#enable-table-of-contents][Enable Table Of Contents]]
@@ -602,7 +602,7 @@ You can use the bindings CTRL plus =/- for zooming in/out.  You can also use CTR
 
  (dt/leader-keys
      "g"   '(:ignore t :wk "Git")    
-     "g /" '(magit-displatch :wk "Magit dispatch")
+     "g /" '(magit-dispatch :wk "Magit dispatch")
      "g ." '(magit-file-dispatch :wk "Magit file dispatch")
      "g a" '(magit-remote-add :wk "Magit add to a repository")
      "g b" '(magit-branch-checkout :wk "Switch branch")
@@ -835,7 +835,7 @@ above point, or a dedicated chat buffer — and the response is just inserted as
 	    ;; Models chosen for GTX 1650 Ti (4GB VRAM).
 	    ;; All are 3B-class so they fit fully in GPU memory at Q4.
 	    :models '(qwen2.5-coder:3b   ;; best small coder, primary choice
-		      quen2.5-coder:7b   ;; larger code, partial CPU offload
+		      qwen2.5-coder:7b   ;; larger code, partial CPU offload
 		      qwen2.5:3b         ;; general purpose
 		      llama3.2:3b        ;; Meta's small model
 		      phi3:mini)))       ;; 3.8B, good reasoner
@@ -1351,8 +1351,7 @@ M-x nerd-icons-install-fonts
 
 
 
-** Diminish Org Indent Mod
-e
+** Diminish Org Indent Mode
 #+begin_src emacs-lisp
 (eval-after-load 'org-indent '(diminish 'org-indent-mode))
 #+end_src

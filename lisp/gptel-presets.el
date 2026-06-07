@@ -24,10 +24,10 @@
 ;; 0  Free-basic
 ;; ------------------------------------------------------------
 (gptel-make-preset 'free-basic
-  :description "Cheap fallback model for everyday queries"
+  :description "Free fallback model for everyday queries"
   :backend     "CBorg"
   :model       'cborg-deepthought
-  :temperature 0.2
+  :temperature nil
   :max-tokens  8192
   :tools       nil    ;; explicitly no tools
   :system
@@ -60,7 +60,7 @@ and org_insert_src_block to add code under a heading.")
 (gptel-make-preset 'vision
   :description "Image-capable assistant"
   :backend     "CBorg"
-  :model       'claude-opus-4-8
+  :model       'cborg-vision
   :temperature nil
   :max-tokens  8192
   :tools       nil
@@ -73,7 +73,7 @@ and org_insert_src_block to add code under a heading.")
 (gptel-make-preset 'tool
   :description "General tool-using assistant (filesystem + shell)"
   :backend     "CBorg"
-  :model       'claude-opus-4-8
+  :model       'cborg-deepthought
   :temperature nil
   :max-tokens  8192
   :tools       (my/gptel-tools "read_file"
@@ -92,7 +92,7 @@ Prefer reading actual files over guessing. Be concise.")
 (gptel-make-preset 'explainer
   :description "Step-by-step teacher"
   :backend     "CBorg"
-  :model       'claude-sonnet-high
+  :model       'cborg-deepthought
   :temperature nil
   :max-tokens  3000
   :tools       nil
@@ -106,7 +106,7 @@ use analogies where helpful, keep jargon minimal, and provide concise code examp
 (gptel-make-preset 'large-context
   :description "Huge-context summariser"
   :backend     "CBorg"
-  :model       'gemini-3.1-pro
+  :model       'google/grok-4.1-reasoning
   :temperature nil
   :max-tokens  8192
   :tools       (my/gptel-tools "read_file" "list_directory")
@@ -121,7 +121,7 @@ Use the read_file tool when the user references a file path you haven't seen yet
 (gptel-make-preset 'org-notes
   :description "Assistant for navigating and editing Org notes"
   :backend     "CBorg"
-  :model       'claude-sonnet-high
+  :model       'cborg-deepthought
   :temperature 0.2
   :max-tokens  8192
   :tools       (my/gptel-tools "org_list_headings"

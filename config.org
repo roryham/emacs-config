@@ -1095,7 +1095,7 @@ Emacs helper package to make Emacs aware of a virtual enviroment. Once Emacs kno
       . (:command "npx"
          :args    ("-y" "@modelcontextprotocol/server-memory")
          :env     (:MEMORY_FILE_PATH
-                   ,(expand-file-name "~/.emacs.d/mcp-global-memory.json"))))
+                   ,(expand-file-name "mcp-global-memory.json" user-emacs-directory))))
 
      ("searxng"
       . (:command "npx"
@@ -1795,6 +1795,29 @@ With Emacs version 29, true transparency has been added.  I have turned transpar
 #+end_src
 
 * Custom Functions
+#+begin_src emacs-lisp
+;; One-off helper: append the wegwil webserver entity to the global MCP
+;; memory store. The server-memory backend uses JSON Lines (one JSON
+;; object per line), with entities tagged "type":"entity".
+;; Run this once with `C-c C-c` on the block.
+(let ((memory-file (expand-file-name "~/.emacs.d/mcp-global-memory.json"))
+      (entity
+       ;; A single entity record matching server-memory's schema.
+       (list :type "entity"
+             :name "wegwil-webserver"
+             :entityType "infrastructure"
+             :observations
+             (vector
+              "Hosted on a Raspberry Pi 5"
+              "Public web address: https://www.wegwil.com"
+              "Fronted by Cloudflare"
+              "Inbound traffic arrives via a cloudflared tunnel (Cloudflare Tunnel)"))))
+  ;; Append as one JSON line. `json-serialize' ships with Emacs 27+.
+  (with-temp-buffer
+    (insert (json-serialize entity) "\n")
+    (append-to-file (point-min) (point-max) memory-file))
+  (message "Appended wegwil-webserver entity to %s" memory-file))
+#+end_src
 #+begin_src emacs-lisp
 ;; --- Custom functions ---
 (defun my/org-inline-paste ()

@@ -28,7 +28,7 @@
   :backend     "CBorg"
   :model       'cborg-deepthought
   :temperature 0.2
-  :max-tokens  4096
+  :max-tokens  8192
   :tools       nil    ;; explicitly no tools
   :system
   "You are a helpful assistant. Keep answers concise and avoid unnecessary detail.")
@@ -40,7 +40,8 @@
   :description "Expert programming assistant with file & buffer access"
   :backend     "CBorg"
   :model       'claude-opus-4-8
-  :max-tokens  8000
+  :temperature nil
+  :max-tokens  8192
   :tools       (my/gptel-tools "read_file"
                                "list_directory"
                                "current_buffer"
@@ -60,7 +61,8 @@ and org_insert_src_block to add code under a heading.")
   :description "Image-capable assistant"
   :backend     "CBorg"
   :model       'claude-opus-4-8
-  :max-tokens  4000
+  :temperature nil
+  :max-tokens  8192
   :tools       nil
   :system
   "You are an AI with vision capabilities. Analyse any attached image and answer the user's question about it. Use Org for any textual description.")
@@ -72,7 +74,8 @@ and org_insert_src_block to add code under a heading.")
   :description "General tool-using assistant (filesystem + shell)"
   :backend     "CBorg"
   :model       'claude-opus-4-8
-  :max-tokens  2500
+  :temperature nil
+  :max-tokens  8192
   :tools       (my/gptel-tools "read_file"
                                "list_directory"
                                "list_buffers"
@@ -90,6 +93,7 @@ Prefer reading actual files over guessing. Be concise.")
   :description "Step-by-step teacher"
   :backend     "CBorg"
   :model       'claude-sonnet-high
+  :temperature nil
   :max-tokens  3000
   :tools       nil
   :system
@@ -103,7 +107,7 @@ use analogies where helpful, keep jargon minimal, and provide concise code examp
   :description "Huge-context summariser"
   :backend     "CBorg"
   :model       'gemini-3.1-pro
-  :temperature 0.2
+  :temperature nil
   :max-tokens  8192
   :tools       (my/gptel-tools "read_file" "list_directory")
   :system
@@ -118,7 +122,8 @@ Use the read_file tool when the user references a file path you haven't seen yet
   :description "Assistant for navigating and editing Org notes"
   :backend     "CBorg"
   :model       'claude-sonnet-high
-  :max-tokens  6000
+  :temperature 0.2
+  :max-tokens  8192
   :tools       (my/gptel-tools "org_list_headings"
                                "org_read_heading"
                                "org_current_subtree"

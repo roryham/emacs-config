@@ -812,10 +812,10 @@ above point, or a dedicated chat buffer — and the response is just inserted as
                  (auth-source-pick-first-password
                   :host "api.cborg.lbl.gov"
                   :user "apikey"))
-          :models '("gpt-oss-120b-high"
+          :models '("cborg-deepthought"
                     "gemma-4-thinking"
                     "claude-sonnet-high"
-                    "claude-opus-4-7"
+                    "claude-opus-4-8"
                     "gpt-4o"
                     "gpt-4.1"
                     "gemini-3.1-pro")))
@@ -1332,14 +1332,6 @@ M-x nerd-icons-install-fonts
 
 ** Babel
 #+begin_src emacs-lisp
-(org-babel-do-load-languages
- 'org-babel-load-languages
- '((shell . t))) ;; Enable shell (bash/sh) code blocks
-
-;; Enable JavaScript execution in Org Babel
-(org-babel-do-load-languages
- 'org-babel-load-languages
- '((js . t)))    ;; Enable JavaScript execution in Org Babel
 
 ;; Tell Org Babel to use Node.js
 (setq org-babel-js-cmd "node")
@@ -1348,9 +1340,6 @@ M-x nerd-icons-install-fonts
 ;;(setq org-confirm-babel-evaluate nil)
 
 #+end_src
-
-
-
 ** Diminish Org Indent Mode
 #+begin_src emacs-lisp
 (eval-after-load 'org-indent '(diminish 'org-indent-mode))
@@ -1365,8 +1354,8 @@ Enable evaluation of source blocks in additional languages beyond emacs-lisp.
    'org-babel-load-languages
    '((emacs-lisp . t)
      (python     . t)
-     (shell      . t)
-     (js         . t)
+     (shell      . t) ;; enable shell bash/sh code blocks 
+     (js         . t) ;; enable javascript executionin org babel
      (sql        . t)))
   ;; Don't prompt before evaluating a source block
   (setq org-confirm-babel-evaluate nil))
@@ -1857,7 +1846,7 @@ With Emacs version 29, true transparency has been added.  I have turned transpar
   (add-hook 'term-mode-hook #'my/evil-insert-in-term)
 
   ;; Optional: set default shell for vterm
-  (setq vterm-shell "/bin/bash")
+  ;; (setq vterm-shell "/bin/bash")
 
 #+end_src
 

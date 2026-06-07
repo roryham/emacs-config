@@ -26,7 +26,7 @@
 (gptel-make-preset 'free-basic
   :description "Cheap fallback model for everyday queries"
   :backend     "CBorg"
-  :model       'gpt-oss-120b-high
+  :model       'cborg-deepthought
   :temperature 0.2
   :max-tokens  4096
   :tools       nil    ;; explicitly no tools
@@ -39,7 +39,7 @@
 (gptel-make-preset 'programmer
   :description "Expert programming assistant with file & buffer access"
   :backend     "CBorg"
-  :model       'claude-opus-4-7
+  :model       'claude-opus-4-8
   :max-tokens  8000
   :tools       (my/gptel-tools "read_file"
                                "list_directory"
@@ -59,7 +59,7 @@ and org_insert_src_block to add code under a heading.")
 (gptel-make-preset 'vision
   :description "Image-capable assistant"
   :backend     "CBorg"
-  :model       'claude-opus-4-7
+  :model       'claude-opus-4-8
   :max-tokens  4000
   :tools       nil
   :system
@@ -71,7 +71,7 @@ and org_insert_src_block to add code under a heading.")
 (gptel-make-preset 'tool
   :description "General tool-using assistant (filesystem + shell)"
   :backend     "CBorg"
-  :model       'claude-opus-4-7
+  :model       'claude-opus-4-8
   :max-tokens  2500
   :tools       (my/gptel-tools "read_file"
                                "list_directory"

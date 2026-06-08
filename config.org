@@ -73,6 +73,7 @@
 
 ** Adding the scripts directory to path
 #+begin_src emacs-lisp
+;; -*- lexical-binding: t; -*-
 (add-to-list 'load-path "~/.config/emacs/scripts/")
 #+end_src
 
@@ -813,12 +814,11 @@ above point, or a dedicated chat buffer — and the response is just inserted as
                   :host "api.cborg.lbl.gov"
                   :user "apikey"))
           :models '("cborg-deepthought"
-                    "gemma-4-thinking"
+                    "cborg-coder"
+		    "cborg-vision"
                     "claude-sonnet-high"
                     "claude-opus-4-8"
-                    "gpt-4o"
-                    "gpt-4.1"
-                    "gemini-3.1-pro")))
+                    "gemini-3.1-pro-high")))
 
   ;; ----------------------------------------------------------------
   ;; Local Ollama backend (only on the machine that has it installed)
@@ -1800,7 +1800,7 @@ With Emacs version 29, true transparency has been added.  I have turned transpar
 ;; memory store. The server-memory backend uses JSON Lines (one JSON
 ;; object per line), with entities tagged "type":"entity".
 ;; Run this once with `C-c C-c` on the block.
-(let ((memory-file (expand-file-name "~/.emacs.d/mcp-global-memory.json"))
+(let ((memory-file (expand-file-name "mcp-global-memory.json" user-emacs-directory))
       (entity
        ;; A single entity record matching server-memory's schema.
        (list :type "entity"
@@ -1818,6 +1818,8 @@ With Emacs version 29, true transparency has been added.  I have turned transpar
     (append-to-file (point-min) (point-max) memory-file))
   (message "Appended wegwil-webserver entity to %s" memory-file))
 #+end_src
+
+
 #+begin_src emacs-lisp
 ;; --- Custom functions ---
 (defun my/org-inline-paste ()
@@ -1873,9 +1875,69 @@ With Emacs version 29, true transparency has been added.  I have turned transpar
 
 #+end_src
 
+#+begin_src emacs-lisp
+(defun my/gptel-magit-commit-message ()
+  "Generate a git commit message based on the staged diff using gptel."
+  (interactive)
+  (let ((diff (with-temp-buffer
+                (magit-git-insert "diff" "--cached")
+                (buffer-string)))
+        (buf (current-buffer)))
+    (when (or (null diff)
+              (string-empty-p (string-trim diff))
+              (not (string-match-p "^[+-]" diff)))
+      (user-error "No staged changes to commit (did you `git add`?)"))
+    ;; Check for existing user-written content (ignoring comment lines and blanks)
+    (when (save-excursion
+            (goto-char (point-min))
+            (let ((has-content nil))
+              (while (and (not has-content) (not (eobp)))
+                (let ((line (buffer-substring-no-properties
+                             (line-beginning-position) (line-end-position))))
+                  (unless (or (string-empty-p (string-trim line))
+                              (string-prefix-p "#" (string-trim line)))
+                    (setq has-content t)))
+                (forward-line 1))
+              has-content))
+      (unless (yes-or-no-p "Commit buffer already has a message. Overwrite? ")
+        (user-error "Aborted; existing message kept")))
+    (message "Generating commit message...")
+    (gptel-request
+     (concat "Write a clear, concise git commit message for the following diff. "
+             "Use the imperative mood for the subject line. "
+             "Output ONLY the commit message (a short subject line, a blank line, and a brief body if needed), "
+             "with no extra markdown formatting, quotes, or explanations.\n\n"
+             diff)
+     :callback
+     (lambda (response info)
+       (cond
+        ;; Ignore reasoning chunks and other non-string payloads
+        ((and (consp response) (eq (car response) 'reasoning))
+         nil)
+        ((not (stringp response))
+         (message "gptel returned non-text response: %S" response))
+        ((string-empty-p (string-trim response))
+         (message "gptel returned empty response. Info: %S" info))
+        (t
+         (with-current-buffer buf
+           ;; Clear any existing non-comment content before inserting
+           (save-excursion
+             (goto-char (point-min))
+             (let ((kill-end
+                    (save-excursion
+                      (goto-char (point-min))
+                      (if (re-search-forward "^#" nil t)
+                          (line-beginning-position)
+                        (point-max)))))
+               (delete-region (point-min) kill-end)))
+           (goto-char (point-min))
+           (insert (string-trim response))
+           (insert "\n")
+           (message "Commit message generated!"))))))))
 
-
-
+(with-eval-after-load 'git-commit
+  (define-key git-commit-mode-map (kbd "C-c C-m") #'my/gptel-magit-commit-message))
+#+end_src
 
 
 

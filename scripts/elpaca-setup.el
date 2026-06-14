@@ -50,9 +50,12 @@
 ;; Emacs 30.1 ships compat 30.1.9999, but several packages (transient,
 ;; llama, magit, etc.) now require compat >= 31. Installing it here
 ;; ensures it's available before any dependent package is built.
+
+;; Force compat from GitHub as normal shallow git clone, bypassing
+;; the GNU ELPA tarball recipe that conflicts with elpaca 0.12's treeless default.
 (unless (alist-get 'compat (elpaca--queued))
-  (elpaca compat)
-  (elpaca-wait))
+  (elpaca (compat :host github :repo "emacs-compat/compat" :depth 1)))
+(elpaca-wait)
 
 (provide 'elpaca-setup)
 ;;; elpaca-setup.el ends here

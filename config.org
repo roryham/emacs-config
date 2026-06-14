@@ -81,7 +81,7 @@
 
 ** Sourcing the scripts
 #+begin_src emacs-lisp
-(require 'elpaca-setup)  ;; The elpaca Package Manager
+;;(require 'elpaca-setup)  ;; The elpaca setup is alr eayldoaded by init.el
 #+end_src
 
 * Apps Script Development
@@ -808,6 +808,7 @@ above point, or a dedicated chat buffer — and the response is just inserted as
           :host "api.cborg.lbl.gov"
           :endpoint "/v1/chat/completions"
           :stream t
+          :request-params '(:parallel_tool_calls :json-false)
          ;; :capabilities '(tool-use)
 	  :key (lambda ()
                  (auth-source-pick-first-password
@@ -875,17 +876,18 @@ above point, or a dedicated chat buffer — and the response is just inserted as
   ;; ----------------------------------------------------------------
   ;; Gptel config files saved elsewhere to load
   ;; ----------------------------------------------------------------
-  ;; Load presets file (must define presets with gptel-make-preset)
+  ;; 1. Load tools file
+  (let ((tools-file (expand-file-name "lisp/gptel-tools.el" user-emacs-directory)))
+    (when (file-exists-p tools-file)
+      (load tools-file)))  
+
+  ;; 2. Load presets file (must define presets with gptel-make-preset)
   (let ((presets-file (expand-file-name "lisp/gptel-presets.el" user-emacs-directory)))
     (when (file-exists-p presets-file)
       (load presets-file)))
 
+  ;; 3. Apply presents immediately
   (gptel--apply-preset 'free-basic)
-
-  ;; Losd tools file
-  (let ((tools-file (expand-file-name "lisp/gptel-tools.el" user-emacs-directory)))
-    (when (file-exists-p tools-file)
-      (load tools-file)))
 
   ;; ----------------------------------------------------------------
   ;; MCP project-memory server: lazy startup
@@ -1096,11 +1098,17 @@ Emacs helper package to make Emacs aware of a virtual enviroment. Once Emacs kno
          :args    ("-y" "@modelcontextprotocol/server-memory")
          :env     (:MEMORY_FILE_PATH
                    ,(expand-file-name "mcp-global-memory.json" user-emacs-directory))))
-
+     ;; Searng is a internent search mcp server
      ("searxng"
       . (:command "npx"
 	  :args    ("-y" "mcp-searxng")
-	  :env     (:SEARXNG_URL "http://localhost:8888")))))
+	  :env     (:SEARXNG_URL "http://localhost:8888")))
+     ;; Fetch is a lightweight headless server that reads webpage data and returns json
+     ;; Every machine needs to have uv installed.curl -LsSf https://astral.sh/uv/install.sh | sh 
+     ("fetch"
+      . (:command "uvx"
+         :args    ("mcp-server-fetch")))))
+
   :config
     (require 'mcp-hub)
     (require 'cl-lib)
@@ -1220,6 +1228,18 @@ Used to avoid spawning duplicate processes for the same project.")
                 (lambda ()
                   (when (fboundp 'mcp-hub-register-all-tool-to-gptel)
                     (mcp-hub-register-all-tool-to-gptel))
+                  ;; Auto-enable THIS project's memory tools in gptel, so
+                  ;; entering a trip "just works" without manual toggling.
+                  ;; The category is "mcp-" + the server name, which keeps
+                  ;; this in sync with `my/project-mcp-server-name'.
+                  (with-eval-after-load 'gptel
+                    (let ((cat (concat "mcp-"
+                                       (my/project-mcp-server-name proj-root))))
+                      (setq gptel-tools
+                            (cl-remove-duplicates
+                             (append gptel-tools
+                                     (gptel-get-tool (list cat)))
+                             :test #'equal))))
                   (message "MCP: project memory server ready for %s"
                            proj-root)))))
           (error
@@ -1234,6 +1254,7 @@ Does not stop any running servers; use `mcp-hub' for that."
   (interactive)
   (setq my/project-mcp-started nil)
   (message "Project MCP started-list cleared."))
+
 #+end_src
 
 * Melpa
@@ -1464,62 +1485,63 @@ Perspective provides multiple named workspaces (or “perspectives”) in Emacs,
 
 * PDF Tools Full Setup
 #+begin_src emacs-lisp
-(use-package pdf-tools
-  :ensure t
-  :defer t
-  :mode ("\\.pdf\\'" . pdf-view-mode)
-  :init
-  (setq pdf-view-use-scaling t
-        pdf-view-use-imagemagick nil)
-  :config
-  (setq pdf-view-incompatible-modes '(display-line-numbers-mode))
-  (pdf-tools-install t)
-  (setq pdf-view-display-size 'fit-page)
+  (use-package pdf-tools
+    :defer t
+    :mode ("\\.pdf\\'" . pdf-view-mode)
+    :config
+    (pdf-tools-install :no-query)
+    :init
+    (setq pdf-view-use-scaling t
+          pdf-view-use-imagemagick nil)
+    :config
+    (setq pdf-view-incompatible-modes '(display-line-numbers-mode))
+    (pdf-tools-install t)
+    (setq pdf-view-display-size 'fit-page)
 
-  ;; Enable annotation minor mode
-  (add-hook 'pdf-view-mode-hook #'pdf-annot-minor-mode)
+    ;; Enable annotation minor mode
+    (add-hook 'pdf-view-mode-hook #'pdf-annot-minor-mode)
 
-  ;; --------------------------------
-  ;; Custom copy function
-  ;; --------------------------------
-  (defun my/pdf-copy-text ()
-    "Copy the currently selected region text in pdf-view."
-    (interactive)
-    (if (pdf-view-active-region-p)
-        (let ((text (mapconcat #'identity (pdf-view-active-region-text) "\n")))
-          (kill-new text)
-          (pdf-view-deactivate-region)
-          (message "Copied: %s" (truncate-string-to-width text 60)))
-      (message "No region selected. Use mouse to select text first.")))
+    ;; --------------------------------
+    ;; Custom copy function
+    ;; --------------------------------
+    (defun my/pdf-copy-text ()
+      "Copy the currently selected region text in pdf-view."
+      (interactive)
+      (if (pdf-view-active-region-p)
+          (let ((text (mapconcat #'identity (pdf-view-active-region-text) "\n")))
+            (kill-new text)
+            (pdf-view-deactivate-region)
+            (message "Copied: %s" (truncate-string-to-width text 60)))
+        (message "No region selected. Use mouse to select text first.")))
 
-  ;; --------------------------------
-  ;; Evil keybindings for pdf-view
-  ;; --------------------------------
-  (with-eval-after-load 'evil
-    (evil-define-key 'normal pdf-view-mode-map
-      (kbd "j")  #'pdf-view-next-line-or-next-page
-      (kbd "k")  #'pdf-view-previous-line-or-previous-page
-      (kbd "h")  #'image-backward-hscroll
-      (kbd "l")  #'image-forward-hscroll
-      (kbd "gg") #'pdf-view-first-page
-      (kbd "G")  #'pdf-view-last-page
-      (kbd "/")  #'isearch-forward
-      (kbd "y")  #'my/pdf-copy-text)
+    ;; --------------------------------
+    ;; Evil keybindings for pdf-view
+    ;; --------------------------------
+    (with-eval-after-load 'evil
+      (evil-define-key 'normal pdf-view-mode-map
+        (kbd "j")  #'pdf-view-next-line-or-next-page
+        (kbd "k")  #'pdf-view-previous-line-or-previous-page
+        (kbd "h")  #'image-backward-hscroll
+        (kbd "l")  #'image-forward-hscroll
+        (kbd "gg") #'pdf-view-first-page
+        (kbd "G")  #'pdf-view-last-page
+        (kbd "/")  #'isearch-forward
+        (kbd "y")  #'my/pdf-copy-text)
 
-    ;; Pass annotation keys through Evil so pdf-annot-minor-mode works
-    (evil-define-key 'normal pdf-annot-minor-mode-map
-      (kbd "a t") #'pdf-annot-add-text-annotation
-      (kbd "a h") #'pdf-annot-add-highlight-markup-annotation
-      (kbd "a u") #'pdf-annot-add-underline-markup-annotation
-      (kbd "a s") #'pdf-annot-add-strikeout-markup-annotation
-      (kbd "a d") #'pdf-annot-delete
-      (kbd "a l") #'pdf-annot-list-annotations))
+      ;; Pass annotation keys through Evil so pdf-annot-minor-mode works
+      (evil-define-key 'normal pdf-annot-minor-mode-map
+        (kbd "a t") #'pdf-annot-add-text-annotation
+        (kbd "a h") #'pdf-annot-add-highlight-markup-annotation
+        (kbd "a u") #'pdf-annot-add-underline-markup-annotation
+        (kbd "a s") #'pdf-annot-add-strikeout-markup-annotation
+        (kbd "a d") #'pdf-annot-delete
+        (kbd "a l") #'pdf-annot-list-annotations))
 
-  ;; --------------------------------
-  ;; Non-evil fallback bindings
-  ;; --------------------------------
-  (define-key pdf-view-mode-map (kbd "C-c C-c") #'my/pdf-copy-text)
-  (define-key pdf-view-mode-map (kbd "M-w")     #'my/pdf-copy-text))
+    ;; --------------------------------
+    ;; Non-evil fallback bindings
+    ;; --------------------------------
+    (define-key pdf-view-mode-map (kbd "C-c C-c") #'my/pdf-copy-text)
+    (define-key pdf-view-mode-map (kbd "M-w")     #'my/pdf-copy-text))
 #+end_src
 
 * PDF Org Tools
@@ -1939,6 +1961,44 @@ With Emacs version 29, true transparency has been added.  I have turned transpar
   (define-key git-commit-mode-map (kbd "C-c C-m") #'my/gptel-magit-commit-message))
 #+end_src
 
+#+begin_src emacs-lisp
+
+(defun my/export-project-memory-to-org (file)
+  "Ask gptel to dump the current project memory as org, save to FILE.
+Full regeneration: overwrites FILE with the agent's rendered plan."
+  (interactive
+   (list (read-file-name
+          "Export plan to org file: "
+          (when-let* ((proj (project-current nil)))
+            (expand-file-name
+             "plan.org"
+             (if (fboundp 'project-root) (project-root proj) (cdr proj)))))))
+  (gptel-request
+      (concat
+       "Read the current project memory and render the entire trip plan "
+       "as a well-structured Org-mode document. Output ONLY valid org "
+       "markup, no preamble, no code fences. Use headings for major "
+       "sections (dates, lodging, activities, logistics) and nested "
+       "subheadings/lists as appropriate.")
+    :callback
+    (lambda (response info)
+      (if (stringp response)
+          (progn
+            (with-temp-file file (insert response))
+            (message "Plan exported to %s" file))
+        (message "Export failed: %s" (plist-get info :status))))))
+
+(defun my/export-project-memory-to-org-quick ()
+  "Export current project memory to plan.org at the project root, no prompt."
+  (interactive)
+  (if-let* ((proj (project-current nil))
+            (root (expand-file-name
+                   (if (fboundp 'project-root) (project-root proj) (cdr proj)))))
+      (my/export-project-memory-to-org (expand-file-name "plan.org" root))
+    (user-error "Not in a project")))
+
+
+#+end_src
 
 
 

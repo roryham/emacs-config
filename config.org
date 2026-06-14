@@ -862,9 +862,8 @@ above point, or a dedicated chat buffer — and the response is just inserted as
     (message "gptel: Ollama backend registered for %s" (system-name)))
 
   ;; ----------------------------------------------------------------
-  ;; Gptel presets - These are not used anymore
+  ;; Gptel directives
   ;; ----------------------------------------------------------------
- 
   (setq gptel-directives
         '((default    . "You are a helpful assistant. Be concise.")
           (programmer . "You are a terse expert programmer. Prefer working code over prose. No preamble, no apologies.")
@@ -876,28 +875,48 @@ above point, or a dedicated chat buffer — and the response is just inserted as
   ;; ----------------------------------------------------------------
   ;; Gptel config files saved elsewhere to load
   ;; ----------------------------------------------------------------
-  ;; 1. Load tools file
+  ;; Flag set to non-nil once presets have been loaded + applied. The MCP
+  ;; block sets this after registering its tools; the fallback timer below
+  ;; checks it so we never apply presets twice.
+  (defvar my/gptel-presets-applied nil
+    "Non-nil once gptel presets have been loaded and applied.")
+
+  ;; 1. Load tools file (synchronous — these are LOCAL tools and must be
+  ;;    available before presets reference them).
   (let ((tools-file (expand-file-name "lisp/gptel-tools.el" user-emacs-directory)))
     (when (file-exists-p tools-file)
-      (load tools-file)))  
+      (load tools-file)))
 
-  ;; 2. Load presets file (must define presets with gptel-make-preset)
-  (let ((presets-file (expand-file-name "lisp/gptel-presets.el" user-emacs-directory)))
-    (when (file-exists-p presets-file)
-      (load presets-file)))
+  ;; 2. Define (but DO NOT yet call) preset loading. The MCP block calls
+  ;;    this once its servers are up and their tools are registered with
+  ;;    gptel, so presets that reference MCP tools resolve correctly.
+  (defun my/gptel-load-and-apply-presets ()
+    "Load gptel presets and apply the default.
+Call only after MCP tools have been registered with gptel."
+    (let ((presets-file (expand-file-name "lisp/gptel-presets.el" user-emacs-directory)))
+      (when (file-exists-p presets-file)
+        (load presets-file)))
+    (condition-case err
+        (gptel--apply-preset 'free-basic)
+      (error (message "gptel: failed to apply preset 'free-basic: %s" err)))
+    (setq my/gptel-presets-applied t))
 
-  ;; 3. Apply presents immediately
-  (gptel--apply-preset 'free-basic)
+  ;; 3. NOTE: presets are intentionally NOT loaded/applied here anymore.
+  ;;    The MCP `:config' starter callback invokes
+  ;;    `my/gptel-load-and-apply-presets' after tool registration.
+  ;;    As a fallback, if MCP never fires (e.g. all servers fail),
+  ;;    apply presets after a delay so gptel is still usable.
+  (run-with-timer
+   15 nil
+   (lambda ()
+     (unless my/gptel-presets-applied
+       (when (fboundp 'my/gptel-load-and-apply-presets)
+         (my/gptel-load-and-apply-presets)
+         (message "gptel: presets applied via fallback timer (MCP callback did not fire)")))))
 
   ;; ----------------------------------------------------------------
   ;; MCP project-memory server: lazy startup
   ;; ----------------------------------------------------------------
-  ;; The global memory MCP server is started at init from the MCP block. Project-local memory servers, however, are spun up on
-  ;; demand to avoid spawning an `npx' process for every project we visit. We hook into gptel's normal entry points so the project
-  ;; server is started (and its tools registered) the first time you actually invoke gptel inside a project.
-  ;;
-  ;; `my/ensure-project-mcp-memory' is defined in the MCP config; it is a no-op when not inside a project, or when the current
-  ;; project's server is already running.
   (advice-add 'gptel-send :before
               (lambda (&rest _)
                 (when (fboundp 'my/ensure-project-mcp-memory)
@@ -919,29 +938,28 @@ above point, or a dedicated chat buffer — and the response is just inserted as
       (kbd "gm")  #'gptel-menu
       (kbd "gr")  #'gptel-rewrite)
     (evil-define-key 'visual gptel-mode-map
-      (kbd "RET") #'gptel-send)))
+      (kbd "RET") #'gptel-send))
 
   ;; ----------------------------------------------------------------
   ;; Gptel custom functions for custom config files and tools saved elsewhere
   ;; ----------------------------------------------------------------
- ;; Auto-tangle the gptel-tools.org on save
-(defun my/tangle-gptel-tools-on-save ()
-  "Tangle gptel-tools.org when saved."
-  (when (and buffer-file-name
-             (string-equal (file-name-nondirectory buffer-file-name)
-                           "gptel-tools.org"))
-    (org-babel-tangle)))
+  ;; Auto-tangle the gptel-tools.org on save
+  (defun my/tangle-gptel-tools-on-save ()
+    "Tangle gptel-tools.org when saved."
+    (when (and buffer-file-name
+               (string-equal (file-name-nondirectory buffer-file-name)
+                             "gptel-tools.org"))
+      (org-babel-tangle)))
 
-(add-hook 'after-save-hook #'my/tangle-gptel-tools-on-save)
+  (add-hook 'after-save-hook #'my/tangle-gptel-tools-on-save)
 
- ;; Interactive functions - reload referenced config files
-(defun my/reload-gptel-all ()
-  "Reload gptel tools then presets."
-  (interactive)
-  (load-file (expand-file-name "lisp/gptel-tools.el" user-emacs-directory))
-  (load-file (expand-file-name "lisp/gptel-presets.el" user-emacs-directory))
-  (message "gptel tools + presets reloaded"))
-
+  ;; Interactive functions - reload referenced config files
+  (defun my/reload-gptel-all ()
+    "Reload gptel tools then presets."
+    (interactive)
+    (load-file (expand-file-name "lisp/gptel-tools.el" user-emacs-directory))
+    (load-file (expand-file-name "lisp/gptel-presets.el" user-emacs-directory))
+    (message "gptel tools + presets reloaded")))
 #+end_src
 
 
@@ -1072,22 +1090,6 @@ Emacs helper package to make Emacs aware of a virtual enviroment. Once Emacs kno
 * MCP (Model Context Protocol)
 #+begin_src emacs-lisp
 ;;; -*- lexical-binding: t; -*-
-;;
-;; MCP (Model Context Protocol) configuration.
-;;
-;; Sets up two kinds of memory servers using
-;; @modelcontextprotocol/server-memory:
-;;
-;;   1. A GLOBAL memory server, shared across all of Emacs, started
-;;      once at init time.
-;;   2. A PROJECT-LOCAL memory server, spun up lazily on demand
-;;      (see `my/ensure-project-mcp-memory' below). The lazy trigger
-;;      itself lives in the gptel config, so MCP here has no knowledge
-;;      of gptel's entry points.
-;;
-;; NOTE: server-memory reads its storage path from the MEMORY_FILE_PATH
-;; environment variable, not from a CLI flag.
-
 (use-package mcp
   :ensure t
   :custom
@@ -1098,77 +1100,67 @@ Emacs helper package to make Emacs aware of a virtual enviroment. Once Emacs kno
          :args    ("-y" "@modelcontextprotocol/server-memory")
          :env     (:MEMORY_FILE_PATH
                    ,(expand-file-name "mcp-global-memory.json" user-emacs-directory))))
-     ;; Searng is a internent search mcp server
+     ;; Searxng is an internet search mcp server
      ("searxng"
       . (:command "npx"
 	  :args    ("-y" "mcp-searxng")
 	  :env     (:SEARXNG_URL "http://localhost:8888")))
      ;; Fetch is a lightweight headless server that reads webpage data and returns json
-     ;; Every machine needs to have uv installed.curl -LsSf https://astral.sh/uv/install.sh | sh 
+     ;; Every machine needs to have uv installed: curl -LsSf https://astral.sh/uv/install.sh | sh
      ("fetch"
       . (:command "uvx"
          :args    ("mcp-server-fetch")))))
 
   :config
-    (require 'mcp-hub)
-    (require 'cl-lib)
+  (require 'mcp-hub)
+  (require 'cl-lib)
 
-    ;; --------------------------------------------------------------
-    ;; Polyfill: `mcp-hub-register-all-tool-to-gptel'
-    ;; --------------------------------------------------------------
-    ;; Some docs and snippets reference a convenience function with
-    ;; this name that automatically registers every MCP-exposed tool
-    ;; with gptel. Our installed version of mcp.el doesn't ship it,
-    ;; but it provides the primitives we need:
-    ;;   - `mcp-hub-get-all-tool' : enumerates (SERVER . TOOL) pairs
-    ;;     across all connected servers.
-    ;;   - `mcp-make-text-tool'   : builds a gptel-compatible spec
-    ;;     for one tool, which we feed to `gptel-make-tool'.
-    ;; We define the helper only if it isn't already provided, so a
-    ;; future upstream version that adds it natively will take
-    ;; precedence automatically.
-   (unless (fboundp 'mcp-hub-register-all-tool-to-gptel)
-  (defun mcp-hub-register-all-tool-to-gptel ()
-    "Register every tool from every connected MCP server with gptel."
-    (interactive)
-    (require 'gptel)
-    (let ((tools (mcp-hub-get-all-tool :asyncp t :categoryp t))
-          (count 0))
-      (dolist (tool tools)
-        (condition-case err
-            (progn (apply #'gptel-make-tool tool)
-                   (cl-incf count))
-          (error (message "Failed to register MCP tool %s: %s"
-                          (plist-get tool :name) err))))
-      (message "Registered %d MCP tools with gptel" count)
-      count))) 
-    ;; Start every server in `mcp-hub-servers' and register their tools
-    ;; with gptel once they're up. If Emacs is still initialising, defer
-    ;; until `after-init-hook'; otherwise (e.g., when this block is
-    ;; re-evaluated interactively or loaded via org-babel after init),
-    ;; fire immediately.
-    ;;
-    ;; A short timer gives the server's stdio handshake time to
-    ;; enumerate tools before we ask gptel to pick them up; without it
-    ;; `mcp-hub-get-all-tool' can return an empty list on first run.
-   (let ((starter
-       (lambda ()
-         (mcp-hub-start-all-server
-          (lambda ()
-            (run-with-timer
-             2 nil
-             (lambda ()
-               (when (fboundp 'mcp-hub-register-all-tool-to-gptel)
-                 (mcp-hub-register-all-tool-to-gptel)
-                 (with-eval-after-load 'gptel
-                   (setq gptel-tools
-                         (cl-remove-duplicates
-                          (append gptel-tools
-                                  (gptel-get-tool '("mcp-global-memory"))) ;; auto-enables global ememory tools as defaults in gptel-tools
-                          :test #'equal)))))))))))
-  (if after-init-time
-      (funcall starter)
-    (add-hook 'after-init-hook starter))))
+  ;; --------------------------------------------------------------
+  ;; Polyfill: `mcp-hub-register-all-tool-to-gptel'
+  ;; --------------------------------------------------------------
+  (unless (fboundp 'mcp-hub-register-all-tool-to-gptel)
+    (defun mcp-hub-register-all-tool-to-gptel ()
+      "Register every tool from every connected MCP server with gptel."
+      (interactive)
+      (require 'gptel)
+      (let ((tools (mcp-hub-get-all-tool :asyncp t :categoryp t))
+            (count 0))
+        (dolist (tool tools)
+          (condition-case err
+              (progn (apply #'gptel-make-tool tool)
+                     (cl-incf count))
+            (error (message "Failed to register MCP tool %s: %s"
+                            (plist-get tool :name) err))))
+        (message "Registered %d MCP tools with gptel" count)
+        count)))
+
+  ;; Start every server in `mcp-hub-servers' and register their tools
+  ;; with gptel once they're up. Then — now that the tools exist —
+  ;; load and apply the gptel presets that reference them.
+  (let ((starter
+         (lambda ()
+           (mcp-hub-start-all-server
+            (lambda ()
+              (run-with-timer
+               2 nil
+               (lambda ()
+                 (when (fboundp 'mcp-hub-register-all-tool-to-gptel)
+                   (mcp-hub-register-all-tool-to-gptel)
+                   (with-eval-after-load 'gptel
+                     (setq gptel-tools
+                           (cl-remove-duplicates
+                            (append gptel-tools
+                                    (gptel-get-tool '("mcp-global-memory"))) ;; auto-enable global memory tools as defaults
+                            :test #'equal))
+                     ;; ---- Now MCP tools exist: load + apply gptel presets ----
+                     ;; `my/gptel-load-and-apply-presets' sets
+                     ;; `my/gptel-presets-applied' itself, which tells the
+                     ;; gptel fallback timer to stand down.
+                     (when (fboundp 'my/gptel-load-and-apply-presets)
+                       (my/gptel-load-and-apply-presets))))))))))) 
+    (if after-init-time
+        (funcall starter)
+      (add-hook 'after-init-hook starter))))
 
 ;;;----------------------------------------------------------------------
 ;;; Project-local memory: lazy startup helpers
@@ -1186,13 +1178,13 @@ Used to avoid spawning duplicate processes for the same project.")
 (defun my/ensure-project-mcp-memory ()
   "Start a project-local memory MCP server for the current project, if needed.
 
-  Looks up the current project via `project-current'. If found, and we
-  haven't already started a server for that root, registers a new entry
-  in `mcp-hub-servers', launches it, and registers its tools with gptel
-  once the connection is established.
+Looks up the current project via `project-current'. If found, and we
+haven't already started a server for that root, registers a new entry
+in `mcp-hub-servers', launches it, and registers its tools with gptel
+once the connection is established.
 
-  Safe to call repeatedly: it's a no-op for projects that have already
-  been initialised, and a no-op when not inside a project."
+Safe to call repeatedly: it's a no-op for projects that have already
+been initialised, and a no-op when not inside a project."
   (interactive)
   (when-let* ((proj      (project-current nil))
               (proj-root (expand-file-name
@@ -1211,15 +1203,9 @@ Used to avoid spawning duplicate processes for the same project.")
         ;; concurrent calls don't race and double-start.
         (push proj-root my/project-mcp-started)
 
-        ;; Register the per-project server with the hub so it shows
-        ;; up in `mcp-hub' UI and survives hub restarts.
+        ;; Register the per-project server with the hub.
         (add-to-list 'mcp-hub-servers (cons server-name server-config))
 
-        ;; Launch it via the hub (same code path used for the global
-        ;; server). `mcp-hub-start-all-server' is a no-op for servers
-        ;; already running, so this only brings up the new one. Once
-        ;; online, refresh gptel's tool registry. A small timer lets
-        ;; the handshake finish before we enumerate tools.
         (condition-case err
             (mcp-hub-start-all-server
              (lambda ()
@@ -1228,10 +1214,7 @@ Used to avoid spawning duplicate processes for the same project.")
                 (lambda ()
                   (when (fboundp 'mcp-hub-register-all-tool-to-gptel)
                     (mcp-hub-register-all-tool-to-gptel))
-                  ;; Auto-enable THIS project's memory tools in gptel, so
-                  ;; entering a trip "just works" without manual toggling.
-                  ;; The category is "mcp-" + the server name, which keeps
-                  ;; this in sync with `my/project-mcp-server-name'.
+                  ;; Auto-enable THIS project's memory tools in gptel.
                   (with-eval-after-load 'gptel
                     (let ((cat (concat "mcp-"
                                        (my/project-mcp-server-name proj-root))))
@@ -1254,7 +1237,6 @@ Does not stop any running servers; use `mcp-hub' for that."
   (interactive)
   (setq my/project-mcp-started nil)
   (message "Project MCP started-list cleared."))
-
 #+end_src
 
 * Melpa

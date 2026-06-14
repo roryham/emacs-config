@@ -52,6 +52,28 @@ List visible (non-internal) buffer names.
 #+end_src
 
 * Filesystem tools
+** append_file
+#+begin_src emacs-lisp
+(gptel-make-tool
+ :name "append_to_file"
+ :function (lambda (path content)
+             (let ((full (expand-file-name path)))
+               (with-temp-buffer
+                 (insert content)
+                 (unless (bolp) (insert "\n"))
+                 (write-region (point-min) (point-max) full t))
+               (format "Appended %d chars to %s" (length content) full)))
+ :description "Append CONTENT to the end of a file, creating the file if it does not exist. Does not overwrite existing contents."
+ :args (list '(:name "path"
+               :type string
+               :description "Absolute or ~-expanded path to the file.")
+             '(:name "content"
+               :type string
+               :description "Text to append."))
+ :category "filesystem"
+ :confirm t)
+#+end_src
+
 ** read_file
 #+begin_src emacs-lisp
 (gptel-make-tool
@@ -80,6 +102,49 @@ List visible (non-internal) buffer names.
                :type string
                :description "Directory path."))
  :category "filesystem")
+#+end_src
+** write_file
+#+begin_src emacs-lisp
+(gptel-make-tool
+ :name "write_file"
+ :function (lambda (path content)
+             (let ((full (expand-file-name path)))
+               (with-temp-buffer
+                 (insert content)
+                 (write-region (point-min) (point-max) full))
+               (format "Wrote %d chars to %s" (length content) full)))
+ :description "Write CONTENT to a file, overwriting any existing contents."
+ :args (list '(:name "path"
+               :type string
+               :description "Absolute or ~-expanded path to the file.")
+             '(:name "content"
+               :type string
+               :description "Full contents to write."))
+ :category "filesystem"
+ :confirm t)
+
+#+end_src
+** write_new_file
+#+begin_src emacs-lisp
+(gptel-make-tool
+ :name "write_new_file"
+ :function (lambda (path content)
+             (let ((full (expand-file-name path)))
+               (if (file-exists-p full)
+                   (error "Refusing to overwrite existing file: %s" full)
+                 (with-temp-buffer
+                   (insert content)
+                   (write-region (point-min) (point-max) full))
+                 (format "Created %s (%d chars)" full (length content)))))
+ :description "Create a NEW file with CONTENT. Errors if the file already exists, so existing files are never overwritten."
+ :args (list '(:name "path"
+               :type string
+               :description "Absolute or ~-expanded path for the new file.")
+             '(:name "content"
+               :type string
+               :description "Full contents of the new file."))
+ :category "filesystem"
+ :confirm t)
 #+end_src
 
 * Org-mode tools

@@ -77,7 +77,12 @@
 (add-to-list 'load-path "~/.config/emacs/scripts/")
 #+end_src
 
-
+Add this to the emacs path variable for uvx (fetch mcp)
+#+begin_src emacs-lisp
+(let ((local-bin (expand-file-name "~/.local/bin")))
+  (add-to-list 'exec-path local-bin)
+  (setenv "PATH" (concat local-bin path-separator (getenv "PATH"))))
+#+end_src
 
 ** Sourcing the scripts
 #+begin_src emacs-lisp
@@ -814,12 +819,15 @@ above point, or a dedicated chat buffer — and the response is just inserted as
                  (auth-source-pick-first-password
                   :host "api.cborg.lbl.gov"
                   :user "apikey"))
-          :models '("cborg-deepthought"
-                    "cborg-coder"
+          :models '("gemma-4-thinking"
+                    "cborg-deepthought"
+		    "cborg-coder"
 		    "cborg-vision"
-                    "claude-sonnet-high"
+                    "claude-haiku-high"
+		    "claude-sonnet-high"
                     "claude-opus-4-8"
-                    "gemini-3.1-pro-high")))
+                    "gemini-3.1-pro-high"
+		    "google/grok-4.1-reasoning")))
 
   ;; ----------------------------------------------------------------
   ;; Local Ollama backend (only on the machine that has it installed)

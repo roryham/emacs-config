@@ -1107,7 +1107,11 @@ Emacs helper package to make Emacs aware of a virtual enviroment. Once Emacs kno
       . (:command "npx"
          :args    ("-y" "@modelcontextprotocol/server-memory")
          :env     (:MEMORY_FILE_PATH
-                   ,(expand-file-name "mcp-global-memory.json" user-emacs-directory))))
+                   ,(expand-file-name "mcp-global-memory.json" user-emacs-directory)
+		   ;; Suppress NPM update notices
+		   :npm_config_update_notifier "false"
+		   ;; Suppress Node experimental warnings
+		   :NODE_OPTIONS "--no-warnings")))
      ;; Searxng is an internet search mcp server
      ("searxng"
       . (:command "npx"
@@ -1205,7 +1209,9 @@ been initialised, and a no-op when not inside a project."
                                               proj-root))
              (server-config `(:command "npx"
                               :args    ("-y" "@modelcontextprotocol/server-memory")
-                              :env     (:MEMORY_FILE_PATH ,memory-file))))
+                              :env     (:MEMORY_FILE_PATH ,memory-file
+			      :npm_config_update_notifier "false"
+                              :NODE_OPTIONS "--no-warnings"))))
 
         ;; Record this project *before* starting the server, so
         ;; concurrent calls don't race and double-start.

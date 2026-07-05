@@ -666,6 +666,10 @@ You can use the bindings CTRL plus =/- for zooming in/out.  You can also use CTR
      "h x" '(describe-command :wk "Display full documentation for command"))
 
  (dt/leader-keys
+     "k"   '(:ignore t :wk "Kill Ring")
+     "k p" '(counsel-yank-pop :wk "Paste from kill ring"))
+
+ (dt/leader-keys
      "m"   '(:ignore t :wk "Org")
      "m a" '(org-agenda :wk "Org agenda")
      "m e" '(org-export-dispatch :wk "Org export dispatch")

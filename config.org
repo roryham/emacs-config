@@ -1036,8 +1036,11 @@ Emacs has built-in programming language modes for Lisp, Scheme, DSSSL, Ada, ASM,
 (use-package cc-mode
   :ensure nil)  ;; Don't install via elpaca. Built in package
 
+;; Treat Arduino .ino files as C++
+(add-to-list 'auto-mode-alist '("\\.ino\\'" . c++-mode))
+
 ;; Set up basic C mode settings
-(add-hook 'c-mode-hook
+(add-hook 'c-mode-common-hook
           (lambda ()
             (setq c-basic-offset 4)  ;; Indentation level
             (setq tab-width 4)))      ;; Tab width

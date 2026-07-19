@@ -6,6 +6,12 @@
 (org-babel-load-file
  (expand-file-name "config.org" user-emacs-directory))
 (message "STEP 3: config.org loaded")
+;; Load machine-specific config if present
+(let ((local-file (expand-file-name "local.el" user-emacs-directory)))
+  (when (file-exists-p local-file)
+    (load local-file)
+    (message "STEP 4: local.el loaded")))
+
 
 ;;; init.el ends here
 (custom-set-variables

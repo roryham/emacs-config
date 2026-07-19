@@ -444,7 +444,7 @@ Install luacheck from your Linux distro’s repositories for flycheck to work co
   :ensure t
   :defer t
   :diminish
-  :init (global-flycheck-mode))
+  :config (global-flycheck-mode))
 
 #+end_src
 
@@ -1770,9 +1770,11 @@ sudo-edit gives us the ability to open files with sudo privileges or switch over
   ;; Sets the default theme to load!!! 
   (load-theme 'doom-one t)
   ;; Enable custom neotree theme (all-the-icons must be installed!)
-   (doom-themes-neotree-config)
+  (require 'doom-themes-ext-neotree)   
+  (doom-themes-neotree-config)
   ;; Corrects (and improves) org-mode's native fontification.
-   (doom-themes-org-config))
+  (require 'doom-themes-ext-org)   
+  (doom-themes-org-config))
 
 #+end_src
 

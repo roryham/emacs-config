@@ -1128,7 +1128,7 @@ Emacs helper package to make Emacs aware of a virtual enviroment. Once Emacs kno
      ;; Every machine needs to have uv installed: curl -LsSf https://astral.sh/uv/install.sh | sh
      ("fetch"
       . (:command "uvx"
-         :args    ("mcp-server-fetch")))))
+         :args    ("--with" "mcp<2" "mcp-server-fetch")))))
 
   :config
   (require 'mcp-hub)

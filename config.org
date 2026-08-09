@@ -31,6 +31,7 @@
 - [[#gptel][Gptel]]
 - [[#ivy-council][Ivy (Council)]]
 - [[#language-support][Language Support]]
+  - [[#bluespec-systemverilog][Bluespec SystemVerilog]]
   - [[#c-language][C Language]]
   - [[#javascript-mode-for-gs-and-js-files][JavaScript Mode for .gs and .js files]]
   - [[#markdown][Markdown]]
@@ -1027,6 +1028,17 @@ Emacs has built-in programming language modes for Lisp, Scheme, DSSSL, Ada, ASM,
 ;;(use-package php-mode)
 
 #+end_src
+
+** Bluespec SystemVerilog
+    Bluespec is specific to the xps15 vm currently as it is in the hardware hacking toolchain for FPGAs
+#+begin_src emacs-lisp
+(use-package bsv-mode
+  :ensure nil ;; This line prevents the pakage manager from trying to download bsv-mode from the internet
+  :if (file-exists-p "~/.config/emacs/lisp/bsv-mode.el")
+  :load-path "~/.config/emacs/lisp/"
+  :mode ("\\.bsv\\'" . bsv-mode))
+#+end_src
+
 
 ** C Language
 #+begin_src emacs-lisp

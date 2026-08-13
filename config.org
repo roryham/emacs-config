@@ -1043,7 +1043,13 @@ Call only after MCP tools have been registered with gptel."
                                 (or (caddr gptel--token-usage-strings) noinfo))))))) 
 
 
-
+ (defun my/gptel-toggle-confirm ()
+  "Toggle tool-call confirmation in this buffer."
+  (interactive)
+  (setq-local gptel-confirm-tool-calls
+              (if gptel-confirm-tool-calls nil 'auto))
+  (message "gptel: tool confirmation %s"
+           (if gptel-confirm-tool-calls "on" "off"))) 
 
 )
 

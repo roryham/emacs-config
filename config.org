@@ -994,7 +994,59 @@ Call only after MCP tools have been registered with gptel."
     (interactive)
     (load-file (expand-file-name "lisp/gptel-tools.el" user-emacs-directory))
     (load-file (expand-file-name "lisp/gptel-presets.el" user-emacs-directory))
-    (message "gptel tools + presets reloaded")))
+    (message "gptel tools + presets reloaded"))
+
+
+ (defun my/gptel-header-line ()
+  "Left-aligned gptel header line with clickable elements."
+  (concat
+   " "
+   (propertize
+    (buttonize (concat "[" (gptel--model-name gptel-model) "]")
+               (lambda (&rest _) (gptel-menu)))
+    'mouse-face 'highlight 'help-echo "Model in use")
+   " "
+   (propertize
+    (buttonize (format "[%s]"
+                       (or (car-safe (rassoc gptel-system-prompt gptel-directives))
+                           (gptel--describe-directive gptel-system-prompt 15)))
+               (lambda (&rest _) (gptel-system-prompt)))
+    'mouse-face 'highlight 'help-echo "System message for session")
+   (when (and gptel-use-tools gptel-tools)
+     (concat " "
+             (propertize
+              (buttonize (format "[%dt]" (length gptel-tools))
+                         (lambda (&rest _)
+                           (run-at-time 0 nil
+                                        (lambda () (call-interactively #'gptel-tools)))))
+              'mouse-face 'highlight 'help-echo "Select tools")))
+   (when gptel-context
+     (concat " "
+             (propertize
+              (buttonize (format "[%d ctx]" (length gptel-context))
+                         (lambda (&rest _)
+                           (require 'gptel-context)
+                           (gptel-context--buffer-setup)))
+              'mouse-face 'highlight 'help-echo "Active gptel context")))
+   (and-let* ((idx (car-safe gptel--token-usage-strings))
+              (entry (or (nth (1+ idx) gptel--token-usage-strings) "[usage...]"))
+              (noinfo "[No info]"))
+     (concat " "
+             (buttonize entry
+                        (lambda (strings)
+                          (and (car-safe strings)
+                               (cl-callf (lambda (pos) (% (1+ pos) 2)) (car strings))))
+                        gptel--token-usage-strings
+                        (concat "Token usage (C = cached tokens)\nLast request: "
+                                (or (cadr gptel--token-usage-strings) noinfo)
+                                "\nThis buffer:  "
+                                (or (caddr gptel--token-usage-strings) noinfo))))))) 
+
+
+
+
+)
+
 #+end_src
 
 

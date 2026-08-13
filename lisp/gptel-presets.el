@@ -1,6 +1,7 @@
 ;;; gptel-presets.el --- Collection of ready-made gptel presets  -*- lexical-binding: t; -*-
 
 (require 'gptel)
+(require 'cl-lib)
 
 ;; Ensure tools are loaded before presets reference them.
 ;; (Safe even if gptel-tools.el was already loaded.)
@@ -10,15 +11,39 @@
 
 ;; ------------------------------------------------------------
 ;; Helper: resolve tool names to tool objects safely
+;;
+;; NOTE: `gptel-get-tool' expects a CATEGORY-qualified path, e.g.
+;; '("org" "org_search"), so a bare name lookup silently fails.  These
+;; helpers search every registered category by name instead.
 ;; ------------------------------------------------------------
+(defun my/gptel-tool (name)
+  "Return the (name . tool) cons for the gptel tool called NAME.
+Searches all registered categories.  Returns nil if not found."
+  (cl-loop for (_cat . tools) in gptel--known-tools
+           thereis (cl-find name tools
+                            :key (lambda (c) (gptel-tool-name (cdr c)))
+                            :test #'equal)))
+
 (defun my/gptel-tools (&rest names)
-  "Return a list of gptel tool objects for NAMES, skipping missing ones."
+  "Return a list of gptel tool objects for NAMES.
+Missing tools are skipped, with a message naming each one."
   (delq nil
         (mapcar (lambda (n)
-                  (condition-case nil
-                      (gptel-get-tool n)
-                    (error (message "gptel preset: tool %S not found" n) nil)))
+                  (let ((hit (my/gptel-tool n)))
+                    (unless hit (message "gptel preset: tool %S not found" n))
+                    (and hit (cdr hit))))
                 names)))
+
+;; ------------------------------------------------------------
+;; Helper: resolve an MCP tool category to its tool names
+;; ------------------------------------------------------------
+(defun my/mcp-tool-names (category)
+  "Return the names of all gptel tools registered under CATEGORY.
+Returns nil if CATEGORY has no tools, e.g. if its MCP server
+failed to start."
+  (condition-case nil
+      (mapcar #'gptel-tool-name (gptel-get-tool (list category)))
+    (error (message "gptel preset: MCP category %S not found" category) nil)))
 
 ;; ------------------------------------------------------------
 ;; 0  Free-basic
@@ -140,7 +165,7 @@ When asked to add notes, use org_insert_under_heading or org_insert_src_block â€
 Preserve the user's existing Org structure and style.")
 
 ;; ------------------------------------------------------------
-;; Org-note assistant
+;; Travel agent
 ;; ------------------------------------------------------------
 (gptel-make-preset 'travel-agent
   :description "AI travel agent: researches trips with real sources, remembers per-trip details, outputs an Org plan."
@@ -196,8 +221,36 @@ Use correct Org syntax: =*=/=**= headings, =-= lists, =| a | b |= tables, and
 =[[url][label]]= links. Flag any figure that should be reconfirmed before booking
 with a =(verify before booking)= note. Keep the document self-contained and
 actionable."
-  :tools '("mcp-searxng" "mcp-fetch"))
+  :tools `(,@(my/mcp-tool-names "mcp-searxng")
+           ,@(my/mcp-tool-names "mcp-fetch")))
 
+;; ------------------------------------------------------------
+;; Gptel-agent.
+;;
+;; `:parents' supplies gptel-agent's system prompt, so none is set here.
+;;
+;; The tool list is spelled out in full, as plain NAMES, rather than
+;; using `:append': appending resolved tool objects onto the parent's
+;; name strings produces a mixed list that breaks the transient menu
+;; (wrong-type-argument characterp).  The first 15 entries are
+;; gptel-agent's own tools â€” re-check them with
+;;   (mapcar #'gptel-tool-name gptel-tools)
+;; in a plain `M-x gptel-agent' buffer after updating the package.
+;;
+;; The three MCP memory *delete* tools are deliberately omitted: an
+;; autonomous loop should not be able to wipe the knowledge graph.
+;; ------------------------------------------------------------
+(gptel-make-preset 'agent
+  :description "gptel-agent on a frontier model, with Org and MCP memory"
+  :parents 'gptel-agent
+  :backend "CBorg"
+  :model 'claude-sonnet-high
+  :tools '("Agent" "TodoWrite" "Glob" "Grep" "Read" "Insert" "Edit" "Write"
+           "Mkdir" "Eval" "Bash" "WebSearch" "WebFetch" "YouTube" "Skill"
+           "org_list_headings" "org_read_heading" "org_search"
+           "org_insert_under_heading" "org_insert_src_block"
+           "open_nodes" "search_nodes" "read_graph"
+           "create_entities" "create_relations" "add_observations"))
 
 (provide 'gptel-presets)
 ;;; gptel-presets.el ends here

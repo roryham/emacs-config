@@ -30,6 +30,7 @@
   - [[#magit][Magit]]
 - [[#gptel][Gptel]]
 - [[#ivy-council][Ivy (Council)]]
+- [[#gptel-agent][Gptel-agent]]
 - [[#language-support][Language Support]]
   - [[#bluespec-systemverilog][Bluespec SystemVerilog]]
   - [[#c-language][C Language]]
@@ -524,6 +525,7 @@ You can use the bindings CTRL plus =/- for zooming in/out.  You can also use CTR
    (dt/leader-keys
      "a"   '(:ignore t :wk "AI/gptel")
      "a a" '(gptel :wk "Open gptel chat")
+     "a A" '(gptel-agent :wk "gptel Agent session") 
      "a s" '(gptel-send :wk "Send to LLM")
      "a m" '(gptel-menu :wk "gptel menu")
      "a r" '(gptel-rewrite :wk "Rewrite region")
@@ -799,8 +801,8 @@ above point, or a dedicated chat buffer — and the response is just inserted as
   (setq auth-sources (list (expand-file-name "~/.authinfo")))
   :config
   ;; Always show the expanded tool menu with descriptions
-  (setq gptel-tool-menu-flatten t) ;; Always show the expanded tool menu with descriptions
-  (setq transient-default-level 7)  ;; Show all transient options at max detai
+  (setq gptel-tool-menu-flatten t)
+  (setq transient-default-level 7)  ;; Show all transient options at max detail
   (setq gptel-default-mode 'org-mode)
   (setq gptel-prompt-prefix-alist
         '((markdown-mode . "### ")
@@ -812,27 +814,45 @@ above point, or a dedicated chat buffer — and the response is just inserted as
   ;; `M-x gptel-tools'.
   (setq gptel-use-tools t)
 
+  ;; ----------------------------------------------------------------
   ;; Backend
+  ;; `:request-params' is set per-model: free-tier models cannot handle
+  ;; parallel tool calls, frontier models can.
+  ;; ----------------------------------------------------------------
   (setq gptel-backend
         (gptel-make-openai "CBorg"
           :host "api.cborg.lbl.gov"
           :endpoint "/v1/chat/completions"
           :stream t
-          :request-params '(:parallel_tool_calls :json-false)
-         ;; :capabilities '(tool-use)
-	  :key (lambda ()
+          :key (lambda ()
                  (auth-source-pick-first-password
                   :host "api.cborg.lbl.gov"
                   :user "apikey"))
-          :models '("gemma-4-thinking"
-                    "cborg-deepthought"
-		    "cborg-coder"
-		    "cborg-vision"
-                    "claude-haiku-high"
-		    "claude-sonnet-high"
-                    "claude-opus-4-8"
-                    "gemini-3.1-pro-high"
-		    "google/grok-4.1-reasoning")))
+          :models
+          '(;; ---- free tier: serialise tool calls ----
+            (gemma-4-thinking
+             :capabilities (tool-use)
+             :request-params (:parallel_tool_calls :json-false))
+            (cborg-deepthought
+             :capabilities (tool-use)
+             :request-params (:parallel_tool_calls :json-false))
+            (cborg-coder
+             :capabilities (tool-use)
+             :request-params (:parallel_tool_calls :json-false))
+            (cborg-vision
+             :capabilities (tool-use media)
+             :mime-types ("image/jpeg" "image/png" "image/webp")
+             :request-params (:parallel_tool_calls :json-false))
+            ;; ---- frontier tier: parallel tool calls allowed ----
+            (claude-haiku-high         :capabilities (tool-use))
+            (claude-sonnet-high        :capabilities (tool-use))
+            (claude-opus-4-8           :capabilities (tool-use))
+            (gemini-3.1-pro-high       :capabilities (tool-use media))
+            (google/grok-4.1-reasoning :capabilities (tool-use)))))
+
+  ;; Explicit default model, so gptel is usable immediately at startup
+  ;; rather than waiting for the presets to land.
+  (setq gptel-model 'cborg-deepthought)
 
   ;; ----------------------------------------------------------------
   ;; Local Ollama backend (only on the machine that has it installed)
@@ -908,7 +928,9 @@ above point, or a dedicated chat buffer — and the response is just inserted as
 Call only after MCP tools have been registered with gptel."
     (let ((presets-file (expand-file-name "lisp/gptel-presets.el" user-emacs-directory)))
       (when (file-exists-p presets-file)
-        (load presets-file)))
+        (condition-case err
+            (load presets-file)
+          (error (message "gptel: error loading presets: %s" err)))))
     (condition-case err
         (gptel--apply-preset 'free-basic)
       (error (message "gptel: failed to apply preset 'free-basic: %s" err)))
@@ -929,16 +951,16 @@ Call only after MCP tools have been registered with gptel."
 
   ;; ----------------------------------------------------------------
   ;; MCP project-memory server: lazy startup
+  ;; Named function (not a lambda) so re-evaluating this block replaces
+  ;; the advice rather than stacking another copy.
   ;; ----------------------------------------------------------------
-  (advice-add 'gptel-send :before
-              (lambda (&rest _)
-                (when (fboundp 'my/ensure-project-mcp-memory)
-                  (my/ensure-project-mcp-memory))))
+  (defun my/gptel-ensure-project-memory (&rest _)
+    "Start the project-local MCP memory server before a gptel request."
+    (when (fboundp 'my/ensure-project-mcp-memory)
+      (my/ensure-project-mcp-memory)))
 
-  (advice-add 'gptel-menu :before
-              (lambda (&rest _)
-                (when (fboundp 'my/ensure-project-mcp-memory)
-                  (my/ensure-project-mcp-memory))))
+  (advice-add 'gptel-send :before #'my/gptel-ensure-project-memory)
+  (advice-add 'gptel-menu :before #'my/gptel-ensure-project-memory)
 
   ;; ----------------------------------------------------------------
   ;; Gptel keybindings
@@ -1019,6 +1041,18 @@ Call only after MCP tools have been registered with gptel."
                                'ivy-rich-switch-buffer-transformer))
 
 #+end_src
+
+* Gptel-agent
+#+begin_src emacs-lisp
+(use-package gptel-agent
+  :ensure t
+  :after gptel
+  :config
+  (gptel-agent-update)
+  (advice-add 'gptel-agent :before #'my/gptel-ensure-project-memory))
+#+end_src
+
+
 
 * Language Support
 Emacs has built-in programming language modes for Lisp, Scheme, DSSSL, Ada, ASM, AWK, C, C++, Fortran, Icon, IDL (CORBA), IDLWAVE, Java, Javascript, M4, Makefiles, Metafont, Modula2, Object Pascal, Objective-C, Octave, Pascal, Perl, Pike, PostScript, Prolog, Python, Ruby, Simula, SQL, Tcl, Verilog, and VHDL.  Other languages will require you to install additional modes.

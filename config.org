@@ -814,44 +814,107 @@ above point, or a dedicated chat buffer — and the response is just inserted as
   ;; `M-x gptel-tools'.
   (setq gptel-use-tools t)
 
+  ;; Reasoning/thinking text: 'ignore discards it, t puts it in a
+  ;; collapsible block, nil drops it inline. 'ignore keeps tool-heavy
+  ;; buffers from accumulating thinking blocks that get resent as context.
+  (setq gptel-include-reasoning 'ignore)
+
   ;; ----------------------------------------------------------------
-  ;; Backend
+  ;; Backend: CBorg (LBL gateway)
   ;; `:request-params' is set per-model: free-tier models cannot handle
   ;; parallel tool calls, frontier models can.
   ;; ----------------------------------------------------------------
-  (setq gptel-backend
-        (gptel-make-openai "CBorg"
-          :host "api.cborg.lbl.gov"
-          :endpoint "/v1/chat/completions"
-          :stream t
-          :key (lambda ()
-                 (auth-source-pick-first-password
-                  :host "api.cborg.lbl.gov"
-                  :user "apikey"))
-          :models
-          '(;; ---- free tier: serialise tool calls ----
-            (gemma-4-thinking
-             :capabilities (tool-use)
-             :request-params (:parallel_tool_calls :json-false))
-            (cborg-deepthought
-             :capabilities (tool-use)
-             :request-params (:parallel_tool_calls :json-false))
-            (cborg-coder
-             :capabilities (tool-use)
-             :request-params (:parallel_tool_calls :json-false))
-            (cborg-vision
-             :capabilities (tool-use media)
-             :mime-types ("image/jpeg" "image/png" "image/webp")
-             :request-params (:parallel_tool_calls :json-false))
-            ;; ---- frontier tier: parallel tool calls allowed ----
-            (claude-haiku-high         :capabilities (tool-use))
-            (claude-sonnet-high        :capabilities (tool-use))
-            (claude-opus-4-8           :capabilities (tool-use))
-            (gemini-3.1-pro-high       :capabilities (tool-use media))
-            (google/grok-4.1-reasoning :capabilities (tool-use)))))
+  (defvar my/gptel-cborg-backend
+    (gptel-make-openai "CBorg"
+      :host "api.cborg.lbl.gov"
+      :endpoint "/v1/chat/completions"
+      :stream t
+      :key (lambda ()
+             (auth-source-pick-first-password
+              :host "api.cborg.lbl.gov"
+              :user "apikey"))
+      :models
+      '(;; ---- free tier: serialise tool calls ----
+        (gemma-4-thinking
+         :capabilities (tool-use)
+         :request-params (:parallel_tool_calls :json-false))
+        (cborg-deepthought
+         :capabilities (tool-use)
+         :request-params (:parallel_tool_calls :json-false))
+        (cborg-coder
+         :capabilities (tool-use)
+         :request-params (:parallel_tool_calls :json-false))
+        (cborg-vision
+         :capabilities (tool-use media)
+         :mime-types ("image/jpeg" "image/png" "image/webp")
+         :request-params (:parallel_tool_calls :json-false))
+        ;; ---- frontier tier: parallel tool calls allowed ----
+        (claude-haiku-high         :capabilities (tool-use))
+        (claude-sonnet-high        :capabilities (tool-use))
+        (claude-opus-4-8           :capabilities (tool-use))
+        (gemini-3.1-pro-high       :capabilities (tool-use media))
+        (google/grok-4.1-reasoning :capabilities (tool-use))))
+    "CBorg (LBL gateway) backend.")
 
-  ;; Explicit default model, so gptel is usable immediately at startup
-  ;; rather than waiting for the presets to land.
+  ;; ----------------------------------------------------------------
+  ;; Backend: DeepSeek (personal API key)
+  ;;
+  ;; Reasoning effort is encoded as separate MODEL entries rather than a
+  ;; separate control axis. The `-low'/`-high' aliases send
+  ;; :model "deepseek-v4-pro" explicitly, so the alias symbol never
+  ;; reaches the API. Switching effort is then just switching model:
+  ;; buffer-local via `gptel-menu', per-request via the @presets below.
+  ;;
+  ;; V4 supports parallel tool calls (up to 128/turn), so unlike the
+  ;; CBorg free tier these are left at the wire default (true).
+  ;; ----------------------------------------------------------------
+  (defvar my/gptel-deepseek-backend
+    (let ((key (lambda ()
+                 (auth-source-pick-first-password
+                  :host "api.deepseek.com"
+                  :user "apikey")))
+          (models
+           '((deepseek-v4-flash
+              :description "V4 Flash (0731) - fast/cheap, no thinking"
+              :capabilities (tool-use json)
+              :request-params (:thinking (:type "disabled")))
+
+             (deepseek-v4-pro
+              :description "V4 Pro (0813) - frontier, no thinking"
+              :capabilities (tool-use json)
+              :request-params (:thinking (:type "disabled")))
+
+             (deepseek-v4-pro-low
+              :description "V4 Pro - thinking, low effort"
+              :capabilities (tool-use json reasoning)
+              :request-params (:model "deepseek-v4-pro"
+                               :thinking (:type "enabled")
+                               :reasoning_effort "low"))
+
+             (deepseek-v4-pro-high
+              :description "V4 Pro - thinking, high effort"
+              :capabilities (tool-use json reasoning)
+              :request-params (:model "deepseek-v4-pro"
+                               :thinking (:type "enabled")
+                               :reasoning_effort "high")))))
+      (if (fboundp 'gptel-make-deepseek)
+          ;; Native constructor: parses `reasoning_content' out of the
+          ;; stream instead of dumping it inline. Explicit :models
+          ;; overrides its built-in (now-retired) model list.
+          (gptel-make-deepseek "DeepSeek"
+            :stream t :key key :models models)
+        ;; Fallback for older gptel.
+        (gptel-make-openai "DeepSeek"
+          :host "api.deepseek.com"
+          :endpoint "/chat/completions"
+          :stream t :key key :models models)))
+    "DeepSeek backend using my personal API key.")
+
+  ;; Explicit default backend + model, so gptel is usable immediately at
+  ;; startup rather than waiting for the presets to land.
+  ;; NOTE: the `free-basic' preset applied below (by MCP callback or the
+  ;; fallback timer) will override these ~15s into startup.
+  (setq gptel-backend my/gptel-cborg-backend)
   (setq gptel-model 'cborg-deepthought)
 
   ;; ----------------------------------------------------------------
@@ -893,6 +956,31 @@ above point, or a dedicated chat buffer — and the response is just inserted as
       :system 'programmer)
 
     (message "gptel: Ollama backend registered for %s" (system-name)))
+
+  ;; ----------------------------------------------------------------
+  ;; DeepSeek presets
+  ;; Apply with `M-x gptel-preset', from `gptel-menu', or inline for a
+  ;; single request by typing e.g. "@ds-high" at the start of a prompt.
+  ;; ----------------------------------------------------------------
+  (gptel-make-preset 'ds
+    :description "DeepSeek V4 Flash - fast general chat"
+    :backend "DeepSeek" :model 'deepseek-v4-flash :system 'default)
+
+  (gptel-make-preset 'ds-code
+    :description "DeepSeek V4 Flash - programming"
+    :backend "DeepSeek" :model 'deepseek-v4-flash :system 'programmer)
+
+  (gptel-make-preset 'ds-pro
+    :description "DeepSeek V4 Pro - frontier, no thinking"
+    :backend "DeepSeek" :model 'deepseek-v4-pro :system 'default)
+
+  (gptel-make-preset 'ds-low
+    :description "DeepSeek V4 Pro - thinking, low effort"
+    :backend "DeepSeek" :model 'deepseek-v4-pro-low :system 'default)
+
+  (gptel-make-preset 'ds-high
+    :description "DeepSeek V4 Pro - thinking, high effort"
+    :backend "DeepSeek" :model 'deepseek-v4-pro-high :system 'explainer)
 
   ;; ----------------------------------------------------------------
   ;; Gptel directives
@@ -963,15 +1051,39 @@ Call only after MCP tools have been registered with gptel."
   (advice-add 'gptel-menu :before #'my/gptel-ensure-project-memory)
 
   ;; ----------------------------------------------------------------
+  ;; Backend switching
+  ;; ----------------------------------------------------------------
+  (defun my/gptel-use-backend (name)
+    "Switch gptel globally to backend NAME, selecting its first model.
+Selecting a model in `gptel-menu' already switches backend implicitly;
+this is for flipping provider without touching anything else."
+    (interactive
+     (list (completing-read "gptel backend: "
+                            (mapcar #'car gptel--known-backends) nil t)))
+    (let ((backend (alist-get name gptel--known-backends nil nil #'equal)))
+      (unless backend (user-error "No gptel backend named %s" name))
+      ;; Drop buffer-local overrides so the new default takes effect here.
+      (kill-local-variable 'gptel-backend)
+      (kill-local-variable 'gptel-model)
+      (setq-default gptel-backend backend
+                    gptel-model (car (gptel-backend-models backend)))
+      (force-mode-line-update)
+      (message "gptel: %s / %s" name (gptel--model-name gptel-model))))
+
+  ;; ----------------------------------------------------------------
   ;; Gptel keybindings
   ;; ----------------------------------------------------------------
   (define-key gptel-mode-map (kbd "C-<return>") #'gptel-send)
+  ;; C-c M-b, not C-c C-b: the latter is `org-backward-heading-same-level'
+  ;; and `gptel-default-mode' is org-mode.
+  (define-key gptel-mode-map (kbd "C-c M-b") #'my/gptel-use-backend)
 
   (with-eval-after-load 'evil
     (evil-define-key 'normal gptel-mode-map
       (kbd "RET") #'gptel-send
       (kbd "gm")  #'gptel-menu
-      (kbd "gr")  #'gptel-rewrite)
+      (kbd "gr")  #'gptel-rewrite
+      (kbd "gb")  #'my/gptel-use-backend)
     (evil-define-key 'visual gptel-mode-map
       (kbd "RET") #'gptel-send))
 
@@ -1052,7 +1164,6 @@ Call only after MCP tools have been registered with gptel."
            (if gptel-confirm-tool-calls "on" "off"))) 
 
 )
-
 #+end_src
 
 

@@ -240,11 +240,32 @@ actionable."
 ;; The three MCP memory *delete* tools are deliberately omitted: an
 ;; autonomous loop should not be able to wipe the knowledge graph.
 ;; ------------------------------------------------------------
-(gptel-make-preset 'agent
-  :description "gptel-agent on a frontier model, with Org and MCP memory"
+;; Tier 1: read-only. No mutation tools at all.
+(gptel-make-preset 'agent-ro
+  :description "Read-only: inspect files, no edits, no shell"
   :parents 'gptel-agent
   :backend "CBorg"
   :model 'claude-sonnet-high
+  :stream nil
+  :tools '("Glob" "Grep" "Read"))
+
+;; Tier 2: read/write plus shell. No subagents.
+(gptel-make-preset 'agent-rw
+  :description "Read/write + shell, single agent, no delegation"
+  :parents 'gptel-agent
+  :backend "CBorg"
+  :model 'claude-sonnet-high
+  :stream nil
+  :tools '("Glob" "Grep" "Read" "Insert" "Edit" "Write" "Mkdir"
+           "Bash" "TodoWrite"))
+
+;; Tier 3: read/write + shell + delegation + web + memory.
+(gptel-make-preset 'agent-full
+  :description "Read/write with subagents, web, Org and MCP memory"
+  :parents 'gptel-agent
+  :backend "CBorg"
+  :model 'claude-sonnet-high
+  :stream nil
   :tools '("Agent" "TodoWrite" "Glob" "Grep" "Read" "Insert" "Edit" "Write"
            "Mkdir" "Eval" "Bash" "WebSearch" "WebFetch" "YouTube" "Skill"
            "org_list_headings" "org_read_heading" "org_search"

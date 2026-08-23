@@ -29,8 +29,8 @@
   - [[#git-time-machine][Git Time Machine]]
   - [[#magit][Magit]]
 - [[#gptel][Gptel]]
-- [[#ivy-council][Ivy (Council)]]
 - [[#gptel-agent][Gptel-agent]]
+- [[#ivycounsel][Ivy/Counsel]]
 - [[#language-support][Language Support]]
   - [[#bluespec-systemverilog][Bluespec SystemVerilog]]
   - [[#c-language][C Language]]
@@ -791,17 +791,40 @@ local models (Ollama, llama.cpp) directly from any Emacs buffer.
 
 Unlike heavier "AI assistant" packages, gptel treats LLM interaction as plain text in ordinary buffers. You can send a region, the buffer
 above point, or a dedicated chat buffer — and the response is just inserted as text you can edit, save, and version-control.
+
+CBorg is reached at =https://api.cborg.lbl.gov=, which is fronted by Cloudflare and can block clients on high request rate — exactly what
+tool-call loops produce, since every round-trip is a fresh request. On the LBL network (VPN, employee wifi, ethernet) the =CBorg-Local=
+backend routes directly to =https://api-local.cborg.lbl.gov= and skips Cloudflare entirely.
+
+Model IDs verified against =/v1/models= on 2026-08-23 via =M-x my/cborg-list-models=.
+
+- *Prefix is the hosting cloud, not the vendor.* Hence both =amazon/claude-opus-4-8= and =google/claude-opus-4-8=. Unprefixed IDs
+  (=claude-fable-5=, =cborg-coder=) are the gateway's own aliases and are what this config uses — no prefix means "let CBorg route it".
+- *Reasoning effort is part of the model ID*, not a request parameter: =-low=, =-medium=, =-high=, =-xhigh=, =-max=, =-ultra=. So
+  =claude-fable-5-high= is a genuinely different model string from =claude-fable-5=, and no =:request-params= are needed to select effort.
+  The ladder is not uniform: most models top out at =-max= or =-xhigh=, and =-ultra= currently exists only on fable-5.
+- *Rolling vs pinned.* =claude-sonnet= / =gemini-pro= / =gpt= track the current best in their class and will silently upgrade under you.
+  =claude-fable-5= / =gemini-3.1-pro= are pinned. Both kinds are in the list below; prefer rolling for daily use, pinned when you need
+  reproducibility.
+- *=-compact= / =-compressed= suffixes* exist on nearly every model. Purpose unverified — presumably server-side context compaction.
+  Check the CBorg docs before using; not wired up here.
+- LBL-hosted models (=cborg-*=, =gemma-4-*=, =gpt-oss-*=, =nomic-embed-*=) are the free/local tier. Everything else bills against a
+  commercial provider.
+
 #+begin_src elisp
 (use-package gptel
   :ensure t
-  ;; Defer config until MCP is loaded, so `my/ensure-project-mcp-memory'
-  ;; (defined in the MCP block) is available when we advise gptel below.
-  :after mcp
+  ;; NOTE: `:after mcp' removed. It made the entire :config block —
+  ;; including the fallback timer meant to rescue a failed MCP load —
+  ;; depend on MCP loading successfully. The MCP advice below is guarded
+  ;; by `fboundp' instead, so load order no longer matters.
   :init
   (setq auth-sources (list (expand-file-name "~/.authinfo")))
   :config
-  ;; Always show the expanded tool menu with descriptions
-  (setq gptel-tool-menu-flatten t)
+  ;; `gptel-tool-menu-flatten' may not exist in your gptel version; a
+  ;; setq on an unbound var fails silently. Guard it.
+  (when (boundp 'gptel-tool-menu-flatten)
+    (setq gptel-tool-menu-flatten t))
   (setq transient-default-level 7)  ;; Show all transient options at max detail
   (setq gptel-default-mode 'org-mode)
   (setq gptel-prompt-prefix-alist
@@ -820,41 +843,294 @@ above point, or a dedicated chat buffer — and the response is just inserted as
   (setq gptel-include-reasoning 'ignore)
 
   ;; ----------------------------------------------------------------
-  ;; Backend: CBorg (LBL gateway)
-  ;; `:request-params' is set per-model: free-tier models cannot handle
-  ;; parallel tool calls, frontier models can.
+  ;; CBorg key lookup
+  ;; Shared by both CBorg backends. `auth-source-pick-first-password'
+  ;; matches on :host, so the api-local backend would otherwise need a
+  ;; duplicate ~/.authinfo line. The fallback covers either entry.
+  ;; ----------------------------------------------------------------
+  (defvar my/gptel-cborg-key
+    (lambda ()
+      (or (auth-source-pick-first-password
+           :host "api.cborg.lbl.gov" :user "apikey")
+          (auth-source-pick-first-password
+           :host "api-local.cborg.lbl.gov" :user "apikey")))
+    "CBorg API key lookup function.")
+
+  ;; Vision-capable models all accept the same set.
+  (defvar my/gptel-image-types '("image/jpeg" "image/png" "image/webp" "image/gif")
+    "MIME types accepted by CBorg's multimodal models.")
+
+  ;; ----------------------------------------------------------------
+  ;; CBorg model list — verified against /v1/models, 2026-08-23.
+  ;;
+  ;; Reasoning effort is baked into the model ID (-low/-medium/-high/
+  ;; -xhigh/-max/-ultra), NOT sent as a request parameter. Do not add
+  ;; :reasoning_effort here; the ID already carries it.
+  ;;
+  ;; Re-verify with `M-x my/cborg-list-models' (C-c M-m). Effort tiers
+  ;; are not uniform across models — check the *cborg-models* buffer
+  ;; before adding a suffix.
+  ;; ----------------------------------------------------------------
+  (defvar my/gptel-cborg-models
+    `(;; ================================================================
+      ;; LBL-hosted / free tier.
+      ;; These cannot handle parallel tool calls — serialise them.
+      ;; ================================================================
+      (cborg-deepthought
+       :description "LBL: reasoning-tuned general model"
+       :capabilities (tool-use)
+       :request-params (:parallel_tool_calls :json-false))
+      (cborg-chat
+       :description "LBL: general chat"
+       :capabilities (tool-use)
+       :request-params (:parallel_tool_calls :json-false))
+      (cborg-instant
+       :description "LBL: fastest, lowest latency"
+       :capabilities (tool-use)
+       :request-params (:parallel_tool_calls :json-false))
+      (cborg-mini
+       :description "LBL: small/cheap general"
+       :capabilities (tool-use)
+       :request-params (:parallel_tool_calls :json-false))
+      (cborg-coder
+       :description "LBL: code"
+       :capabilities (tool-use)
+       :request-params (:parallel_tool_calls :json-false))
+      (cborg-coder-max
+       :description "LBL: code, largest variant"
+       :capabilities (tool-use)
+       :request-params (:parallel_tool_calls :json-false))
+      (cborg-coder-fast
+       :description "LBL: code, latency-optimised"
+       :capabilities (tool-use)
+       :request-params (:parallel_tool_calls :json-false))
+      (cborg-vision
+       :description "LBL: multimodal"
+       :capabilities (tool-use media)
+       :mime-types ,my/gptel-image-types
+       :request-params (:parallel_tool_calls :json-false))
+      (cborg-ocr
+       :description "LBL: document/text extraction from images"
+       :capabilities (media)
+       :mime-types ,my/gptel-image-types)
+      (gemma-4-thinking
+       :description "LBL: Gemma 4 with reasoning"
+       :capabilities (tool-use)
+       :request-params (:parallel_tool_calls :json-false))
+      (gemma-4
+       :description "LBL: Gemma 4, no reasoning"
+       :capabilities (tool-use)
+       :request-params (:parallel_tool_calls :json-false))
+      (gpt-oss-120b-high
+       :description "LBL: GPT-OSS 120B, high effort"
+       :capabilities (tool-use)
+       :request-params (:parallel_tool_calls :json-false))
+      (gpt-oss-20b
+       :description "LBL: GPT-OSS 20B"
+       :capabilities (tool-use)
+       :request-params (:parallel_tool_calls :json-false))
+
+      ;; ================================================================
+      ;; Frontier — Anthropic.
+      ;; Fable 5 replaces Opus as the top-tier model here. It carries the
+      ;; full effort ladder including -ultra, which no other model on the
+      ;; gateway exposes. Opus entries removed 2026-08-23; if you need one
+      ;; back, `claude-opus' (rolling) and `claude-opus-4-8' (pinned) are
+      ;; both still served.
+      ;; ================================================================
+      (claude-fable-5
+       :description "Fable 5 — default effort"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+      (claude-fable-5-medium
+       :description "Fable 5 — medium effort"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+      (claude-fable-5-high
+       :description "Fable 5 — high effort, daily driver"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+      (claude-fable-5-xhigh
+       :description "Fable 5 — extra-high effort"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+      (claude-fable-5-ultra
+       :description "Fable 5 — ultra effort, slowest/most expensive"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+      (claude-sonnet
+       :description "Rolling: current Sonnet"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+      (claude-sonnet-high
+       :description "Rolling: current Sonnet, high effort"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+      (claude-sonnet-5
+       :description "Pinned: Sonnet 5"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+      (claude-haiku
+       :description "Rolling: current Haiku, cheap/fast"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+      (claude-haiku-high
+       :description "Rolling: current Haiku, high effort"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+
+      ;; ================================================================
+      ;; Frontier — OpenAI
+      ;; ================================================================
+      (gpt-5.6-sol
+       :description "GPT-5.6 Sol"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+      (gpt-5.6-sol-high
+       :description "GPT-5.6 Sol, high effort"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+      (gpt-5.6-sol-max
+       :description "GPT-5.6 Sol, max effort"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+      (gpt-5.5-pro
+       :description "GPT-5.5 Pro"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+      (gpt-5.3-codex-high
+       :description "Codex, high effort — agentic coding"
+       :capabilities (tool-use json))
+
+      ;; ================================================================
+      ;; Frontier — Google
+      ;; ================================================================
+      (gemini-3.1-pro
+       :description "Pinned: Gemini 3.1 Pro"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+      (gemini-3.1-pro-high
+       :description "Pinned: Gemini 3.1 Pro, high effort"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+      (gemini-pro-high
+       :description "Rolling: current Gemini Pro, high effort"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+      (gemini-3.7-flash
+       :description "Gemini 3.7 Flash — fast, cheap, long context"
+       :capabilities (tool-use media json)
+       :mime-types ,my/gptel-image-types)
+      (gemini-flash-lite
+       :description "Rolling: cheapest Gemini"
+       :capabilities (tool-use media)
+       :mime-types ,my/gptel-image-types)
+
+      ;; ================================================================
+      ;; Frontier — xAI and others
+      ;; ================================================================
+      (xai/grok-4.3
+       :description "Grok 4.3"
+       :capabilities (tool-use json))
+      (xai/grok-fast-reasoning
+       :description "Rolling: Grok fast reasoning"
+       :capabilities (tool-use json))
+      (mistral-large-3
+       :description "Mistral Large 3"
+       :capabilities (tool-use json))
+      (devstral-2
+       :description "Devstral 2 — code"
+       :capabilities (tool-use json)))
+    "CBorg model list, shared by the Cloudflare and direct backends.")
+
+  ;; ----------------------------------------------------------------
+  ;; Backend: CBorg via Cloudflare (works anywhere)
   ;; ----------------------------------------------------------------
   (defvar my/gptel-cborg-backend
     (gptel-make-openai "CBorg"
       :host "api.cborg.lbl.gov"
       :endpoint "/v1/chat/completions"
       :stream t
-      :key (lambda ()
-             (auth-source-pick-first-password
-              :host "api.cborg.lbl.gov"
-              :user "apikey"))
-      :models
-      '(;; ---- free tier: serialise tool calls ----
-        (gemma-4-thinking
-         :capabilities (tool-use)
-         :request-params (:parallel_tool_calls :json-false))
-        (cborg-deepthought
-         :capabilities (tool-use)
-         :request-params (:parallel_tool_calls :json-false))
-        (cborg-coder
-         :capabilities (tool-use)
-         :request-params (:parallel_tool_calls :json-false))
-        (cborg-vision
-         :capabilities (tool-use media)
-         :mime-types ("image/jpeg" "image/png" "image/webp")
-         :request-params (:parallel_tool_calls :json-false))
-        ;; ---- frontier tier: parallel tool calls allowed ----
-        (claude-haiku-high         :capabilities (tool-use))
-        (claude-sonnet-high        :capabilities (tool-use))
-        (claude-opus-4-8           :capabilities (tool-use))
-        (gemini-3.1-pro-high       :capabilities (tool-use media))
-        (google/grok-4.1-reasoning :capabilities (tool-use))))
-    "CBorg (LBL gateway) backend.")
+      :key my/gptel-cborg-key
+      :models my/gptel-cborg-models)
+    "CBorg (LBL gateway) via the public Cloudflare-fronted host.")
+
+  ;; ----------------------------------------------------------------
+  ;; Backend: CBorg direct (LBL network only)
+  ;; Bypasses Cloudflare, which can block clients on high request rate —
+  ;; exactly what tool-call loops produce, since each round-trip is a
+  ;; fresh request. Reachable only on VPN / employee wifi / ethernet.
+  ;;
+  ;; gptel model properties live on the interned symbols themselves, so
+  ;; both backends genuinely share one definition and cannot drift.
+  ;; ----------------------------------------------------------------
+  (defvar my/gptel-cborg-local-backend
+    (gptel-make-openai "CBorg-Local"
+      :host "api-local.cborg.lbl.gov"
+      :endpoint "/v1/chat/completions"
+      :stream t
+      :key my/gptel-cborg-key
+      :models my/gptel-cborg-models)
+    "CBorg direct route, no Cloudflare. LBL network only.")
+
+  ;; ----------------------------------------------------------------
+  ;; Model discovery — ground truth for the list above
+  ;; ----------------------------------------------------------------
+  (defun my/cborg-list-models (&optional local)
+    "Fetch and display the model IDs CBorg currently serves.
+With prefix arg LOCAL, query the direct api-local host instead.
+Doubles as a check that the auth-source key lookup works."
+    (interactive "P")
+    (let* ((key (funcall my/gptel-cborg-key))
+           (host (if local "api-local.cborg.lbl.gov" "api.cborg.lbl.gov"))
+           (url-request-extra-headers
+            `(("Authorization" . ,(concat "Bearer " key)))))
+      (unless key (user-error "No CBorg key found in auth-sources"))
+      (url-retrieve
+       (format "https://%s/v1/models" host)
+       (lambda (status)
+         (if (plist-get status :error)
+             (message "cborg: %S" (plist-get status :error))
+           (goto-char (point-min))
+           (re-search-forward "^$")
+           (let* ((json (json-parse-buffer :object-type 'alist
+                                           :array-type 'list))
+                  (ids (mapcar (lambda (m) (alist-get 'id m))
+                               (alist-get 'data json))))
+             (with-current-buffer (get-buffer-create "*cborg-models*")
+               (erase-buffer)
+               (dolist (id (sort ids #'string<)) (insert id "\n"))
+               (goto-char (point-min))
+               (display-buffer (current-buffer))))))
+       nil t)))
+
+  (defun my/cborg-check-models ()
+    "Report entries in `my/gptel-cborg-models' the gateway no longer serves.
+Run after CBorg rotates models to catch dead config before it 400s."
+    (interactive)
+    (let* ((key (funcall my/gptel-cborg-key))
+           (url-request-extra-headers
+            `(("Authorization" . ,(concat "Bearer " key))))
+           (configured (mapcar (lambda (m) (symbol-name (car m)))
+                               my/gptel-cborg-models)))
+      (url-retrieve
+       "https://api.cborg.lbl.gov/v1/models"
+       (lambda (status)
+         (if (plist-get status :error)
+             (message "cborg: %S" (plist-get status :error))
+           (goto-char (point-min))
+           (re-search-forward "^$")
+           (let* ((json (json-parse-buffer :object-type 'alist
+                                           :array-type 'list))
+                  (live (mapcar (lambda (m) (alist-get 'id m))
+                                (alist-get 'data json)))
+                  (dead (seq-remove (lambda (m) (member m live)) configured)))
+             (if dead
+                 (message "cborg: %d configured model(s) NOT served: %s"
+                          (length dead) (string-join dead ", "))
+               (message "cborg: all %d configured models OK"
+                        (length configured))))))
+       nil t)))
 
   ;; ----------------------------------------------------------------
   ;; Backend: DeepSeek (personal API key)
@@ -864,9 +1140,16 @@ above point, or a dedicated chat buffer — and the response is just inserted as
   ;; :model "deepseek-v4-pro" explicitly, so the alias symbol never
   ;; reaches the API. Switching effort is then just switching model:
   ;; buffer-local via `gptel-menu', per-request via the @presets below.
+  ;; That override is sound: `gptel--request-data' merges model params
+  ;; over the payload built from `gptel-model'.
   ;;
-  ;; V4 supports parallel tool calls (up to 128/turn), so unlike the
-  ;; CBorg free tier these are left at the wire default (true).
+  ;; VERIFY: `:thinking (:type "enabled")' is Anthropic's parameter
+  ;; shape. DeepSeek's published API selects reasoning by model ID
+  ;; (deepseek-chat vs deepseek-reasoner), not a `thinking' object.
+  ;; Unknown params are usually ignored rather than rejected — the
+  ;; dangerous case, since `ds-high' would silently return non-thinking
+  ;; output. Send one request per alias and confirm `reasoning_content'
+  ;; actually appears. If it does not, switch to the commented form.
   ;; ----------------------------------------------------------------
   (defvar my/gptel-deepseek-backend
     (let ((key (lambda ()
@@ -896,7 +1179,13 @@ above point, or a dedicated chat buffer — and the response is just inserted as
               :capabilities (tool-use json reasoning)
               :request-params (:model "deepseek-v4-pro"
                                :thinking (:type "enabled")
-                               :reasoning_effort "high")))))
+                               :reasoning_effort "high"))
+
+             ;; Fallback shape if `thinking' turns out to be a no-op:
+             ;; (deepseek-reasoner
+             ;;  :description "Reasoning model, selected by ID"
+             ;;  :capabilities (tool-use json reasoning))
+             )))
       (if (fboundp 'gptel-make-deepseek)
           ;; Native constructor: parses `reasoning_content' out of the
           ;; stream instead of dumping it inline. Explicit :models
@@ -926,16 +1215,16 @@ above point, or a dedicated chat buffer — and the response is just inserted as
   ;; Hostname check - matches "XPS15-Rory" exactly, or anything starting with it.
   (when (string-match-p "\\`XPS15-Rory" (system-name))
     (setq my/gptel-ollama-backend
-	  (gptel-make-ollama "Ollama"
-	    :host "localhost:11434"
-	    :stream t
-	    ;; Models chosen for GTX 1650 Ti (4GB VRAM).
-	    ;; All are 3B-class so they fit fully in GPU memory at Q4.
-	    :models '(qwen2.5-coder:3b   ;; best small coder, primary choice
-		      qwen2.5-coder:7b   ;; larger code, partial CPU offload
-		      qwen2.5:3b         ;; general purpose
-		      llama3.2:3b        ;; Meta's small model
-		      phi3:mini)))       ;; 3.8B, good reasoner
+          (gptel-make-ollama "Ollama"
+            :host "localhost:11434"
+            :stream t
+            ;; Models chosen for GTX 1650 Ti (4GB VRAM).
+            ;; All are 3B-class so they fit fully in GPU memory at Q4.
+            :models '(qwen2.5-coder:3b   ;; best small coder, primary choice
+                      qwen2.5-coder:7b   ;; larger code, partial CPU offload
+                      qwen2.5:3b         ;; general purpose
+                      llama3.2:3b        ;; Meta's small model
+                      phi3:mini)))       ;; 3.8B, good reasoner
 
     (gptel-make-preset 'ollama-local
       :description "Local Ollama on XPS15 (offline, no API cost)"
@@ -956,6 +1245,56 @@ above point, or a dedicated chat buffer — and the response is just inserted as
       :system 'programmer)
 
     (message "gptel: Ollama backend registered for %s" (system-name)))
+
+  ;; ----------------------------------------------------------------
+  ;; CBorg presets
+  ;; Use `@cb-local' for tool-heavy sessions while on the LBL network,
+  ;; to keep Cloudflare's rate limiter out of the loop.
+  ;; ----------------------------------------------------------------
+  (gptel-make-preset 'cb
+    :description "CBorg free tier - LBL-hosted general chat"
+    :backend "CBorg" :model 'cborg-deepthought :system 'default)
+
+  (gptel-make-preset 'cb-code
+    :description "CBorg free tier - LBL-hosted coder"
+    :backend "CBorg" :model 'cborg-coder :system 'programmer)
+
+  (gptel-make-preset 'cb-local
+    :description "CBorg direct, no Cloudflare (LBL network only)"
+    :backend "CBorg-Local" :model 'cborg-deepthought :system 'default)
+
+  (gptel-make-preset 'cb-fast
+    :description "CBorg - lowest latency, free tier"
+    :backend "CBorg" :model 'cborg-instant :system 'default)
+
+  (gptel-make-preset 'sonnet
+    :description "Claude Sonnet (rolling) - general frontier work"
+    :backend "CBorg" :model 'claude-sonnet :system 'default)
+
+  ;; Fable 5 replaces the old `opus' preset as the top-tier option.
+  (gptel-make-preset 'fable
+    :description "Fable 5, high effort - hardest problems"
+    :backend "CBorg" :model 'claude-fable-5-high :system 'explainer)
+
+  (gptel-make-preset 'fable-ultra
+    :description "Fable 5, ultra effort - slow, expensive, last resort"
+    :backend "CBorg" :model 'claude-fable-5-ultra :system 'explainer)
+
+  (gptel-make-preset 'fable-code
+    :description "Fable 5, high effort - programming"
+    :backend "CBorg" :model 'claude-fable-5-high :system 'programmer)
+
+  (gptel-make-preset 'codex
+    :description "GPT-5.3 Codex, high effort - agentic coding"
+    :backend "CBorg" :model 'gpt-5.3-codex-high :system 'programmer)
+
+  (gptel-make-preset 'flash
+    :description "Gemini 3.7 Flash - cheap, long context"
+    :backend "CBorg" :model 'gemini-3.7-flash :system 'default)
+
+  (gptel-make-preset 'vision
+    :description "CBorg multimodal - image input, free tier"
+    :backend "CBorg" :model 'cborg-vision :system 'default)
 
   ;; ----------------------------------------------------------------
   ;; DeepSeek presets
@@ -1024,18 +1363,20 @@ Call only after MCP tools have been registered with gptel."
       (error (message "gptel: failed to apply preset 'free-basic: %s" err)))
     (setq my/gptel-presets-applied t))
 
-  ;; 3. NOTE: presets are intentionally NOT loaded/applied here anymore.
-  ;;    The MCP `:config' starter callback invokes
+  ;; 3. Presets are intentionally NOT loaded/applied here. The MCP
+  ;;    `:config' starter callback invokes
   ;;    `my/gptel-load-and-apply-presets' after tool registration.
   ;;    As a fallback, if MCP never fires (e.g. all servers fail),
   ;;    apply presets after a delay so gptel is still usable.
-  (run-with-timer
-   15 nil
-   (lambda ()
-     (unless my/gptel-presets-applied
-       (when (fboundp 'my/gptel-load-and-apply-presets)
-         (my/gptel-load-and-apply-presets)
-         (message "gptel: presets applied via fallback timer (MCP callback did not fire)")))))
+  ;;    Named function, not a lambda, so re-evaluating this block
+  ;;    cancels the old timer instead of stacking a new one.
+  (defun my/gptel--preset-fallback ()
+    (unless my/gptel-presets-applied
+      (my/gptel-load-and-apply-presets)
+      (message "gptel: presets applied via fallback timer (MCP callback did not fire)")))
+
+  (cancel-function-timers #'my/gptel--preset-fallback)
+  (run-with-timer 15 nil #'my/gptel--preset-fallback)
 
   ;; ----------------------------------------------------------------
   ;; MCP project-memory server: lazy startup
@@ -1071,25 +1412,80 @@ this is for flipping provider without touching anything else."
       (message "gptel: %s / %s" name (gptel--model-name gptel-model))))
 
   ;; ----------------------------------------------------------------
-  ;; Gptel keybindings
+  ;; Header line
   ;; ----------------------------------------------------------------
-  (define-key gptel-mode-map (kbd "C-<return>") #'gptel-send)
-  ;; C-c M-b, not C-c C-b: the latter is `org-backward-heading-same-level'
-  ;; and `gptel-default-mode' is org-mode.
-  (define-key gptel-mode-map (kbd "C-c M-b") #'my/gptel-use-backend)
+  (defun my/gptel-header-line ()
+    "Left-aligned gptel header line with clickable elements."
+    (concat
+     " "
+     (propertize
+      (buttonize (concat "[" (gptel--model-name gptel-model) "]")
+                 (lambda (&rest _) (gptel-menu)))
+      'mouse-face 'highlight 'help-echo "Model in use")
+     " "
+     (propertize
+      (buttonize (format "[%s]"
+                         (or (car-safe (rassoc gptel-system-prompt gptel-directives))
+                             (gptel--describe-directive gptel-system-prompt 15)))
+                 (lambda (&rest _) (gptel-system-prompt)))
+      'mouse-face 'highlight 'help-echo "System message for session")
+     (when (and gptel-use-tools gptel-tools)
+       (concat " "
+               (propertize
+                (buttonize (format "[%dt]" (length gptel-tools))
+                           (lambda (&rest _)
+                             (run-at-time 0 nil
+                                          (lambda () (call-interactively #'gptel-tools)))))
+                'mouse-face 'highlight 'help-echo "Select tools")))
+     (when gptel-context
+       (concat " "
+               (propertize
+                (buttonize (format "[%d ctx]" (length gptel-context))
+                           (lambda (&rest _)
+                             (require 'gptel-context)
+                             (gptel-context--buffer-setup)))
+                'mouse-face 'highlight 'help-echo "Active gptel context")))
+     (and-let* ((idx (car-safe gptel--token-usage-strings))
+                (entry (or (nth (1+ idx) gptel--token-usage-strings) "[usage...]"))
+                (noinfo "[No info]"))
+       (concat " "
+               (buttonize entry
+                          (lambda (strings)
+                            (and (car-safe strings)
+                                 (cl-callf (lambda (pos) (% (1+ pos) 2)) (car strings))))
+                          gptel--token-usage-strings
+                          (concat "Token usage (C = cached tokens)\nLast request: "
+                                  (or (cadr gptel--token-usage-strings) noinfo)
+                                  "\nThis buffer:  "
+                                  (or (caddr gptel--token-usage-strings) noinfo)))))))
 
-  (with-eval-after-load 'evil
-    (evil-define-key 'normal gptel-mode-map
-      (kbd "RET") #'gptel-send
-      (kbd "gm")  #'gptel-menu
-      (kbd "gr")  #'gptel-rewrite
-      (kbd "gb")  #'my/gptel-use-backend)
-    (evil-define-key 'visual gptel-mode-map
-      (kbd "RET") #'gptel-send))
+  ;; `my/gptel-header-line' was previously defined but never installed.
+  ;; Disable gptel's own header so the two don't compete. To go back to
+  ;; the stock header, delete this setq and the hook below.
+  (setq gptel-use-header-line nil)
+  (add-hook 'gptel-mode-hook
+            (lambda ()
+              (setq header-line-format '((:eval (my/gptel-header-line))))))
 
   ;; ----------------------------------------------------------------
   ;; Gptel custom functions for custom config files and tools saved elsewhere
   ;; ----------------------------------------------------------------
+  (defun my/gptel-toggle-confirm ()
+    "Toggle tool-call confirmation in this buffer."
+    (interactive)
+    (setq-local gptel-confirm-tool-calls
+                (if gptel-confirm-tool-calls nil 'auto))
+    (message "gptel: tool confirmation %s"
+             (if gptel-confirm-tool-calls "on" "off")))
+
+  ;; Interactive - reload referenced config files
+  (defun my/reload-gptel-all ()
+    "Reload gptel tools then presets."
+    (interactive)
+    (load-file (expand-file-name "lisp/gptel-tools.el" user-emacs-directory))
+    (load-file (expand-file-name "lisp/gptel-presets.el" user-emacs-directory))
+    (message "gptel tools + presets reloaded"))
+
   ;; Auto-tangle the gptel-tools.org on save
   (defun my/tangle-gptel-tools-on-save ()
     "Tangle gptel-tools.org when saved."
@@ -1100,75 +1496,39 @@ this is for flipping provider without touching anything else."
 
   (add-hook 'after-save-hook #'my/tangle-gptel-tools-on-save)
 
-  ;; Interactive functions - reload referenced config files
-  (defun my/reload-gptel-all ()
-    "Reload gptel tools then presets."
-    (interactive)
-    (load-file (expand-file-name "lisp/gptel-tools.el" user-emacs-directory))
-    (load-file (expand-file-name "lisp/gptel-presets.el" user-emacs-directory))
-    (message "gptel tools + presets reloaded"))
+  ;; ----------------------------------------------------------------
+  ;; Gptel keybindings
+  ;; ----------------------------------------------------------------
+  (define-key gptel-mode-map (kbd "C-<return>") #'gptel-send)
+  ;; C-c M-b, not C-c C-b: the latter is `org-backward-heading-same-level'
+  ;; and `gptel-default-mode' is org-mode.
+  (define-key gptel-mode-map (kbd "C-c M-b") #'my/gptel-use-backend)
+  (define-key gptel-mode-map (kbd "C-c M-m") #'my/cborg-list-models)
+  (define-key gptel-mode-map (kbd "C-c M-v") #'my/cborg-check-models)
 
-
- (defun my/gptel-header-line ()
-  "Left-aligned gptel header line with clickable elements."
-  (concat
-   " "
-   (propertize
-    (buttonize (concat "[" (gptel--model-name gptel-model) "]")
-               (lambda (&rest _) (gptel-menu)))
-    'mouse-face 'highlight 'help-echo "Model in use")
-   " "
-   (propertize
-    (buttonize (format "[%s]"
-                       (or (car-safe (rassoc gptel-system-prompt gptel-directives))
-                           (gptel--describe-directive gptel-system-prompt 15)))
-               (lambda (&rest _) (gptel-system-prompt)))
-    'mouse-face 'highlight 'help-echo "System message for session")
-   (when (and gptel-use-tools gptel-tools)
-     (concat " "
-             (propertize
-              (buttonize (format "[%dt]" (length gptel-tools))
-                         (lambda (&rest _)
-                           (run-at-time 0 nil
-                                        (lambda () (call-interactively #'gptel-tools)))))
-              'mouse-face 'highlight 'help-echo "Select tools")))
-   (when gptel-context
-     (concat " "
-             (propertize
-              (buttonize (format "[%d ctx]" (length gptel-context))
-                         (lambda (&rest _)
-                           (require 'gptel-context)
-                           (gptel-context--buffer-setup)))
-              'mouse-face 'highlight 'help-echo "Active gptel context")))
-   (and-let* ((idx (car-safe gptel--token-usage-strings))
-              (entry (or (nth (1+ idx) gptel--token-usage-strings) "[usage...]"))
-              (noinfo "[No info]"))
-     (concat " "
-             (buttonize entry
-                        (lambda (strings)
-                          (and (car-safe strings)
-                               (cl-callf (lambda (pos) (% (1+ pos) 2)) (car strings))))
-                        gptel--token-usage-strings
-                        (concat "Token usage (C = cached tokens)\nLast request: "
-                                (or (cadr gptel--token-usage-strings) noinfo)
-                                "\nThis buffer:  "
-                                (or (caddr gptel--token-usage-strings) noinfo))))))) 
-
-
- (defun my/gptel-toggle-confirm ()
-  "Toggle tool-call confirmation in this buffer."
-  (interactive)
-  (setq-local gptel-confirm-tool-calls
-              (if gptel-confirm-tool-calls nil 'auto))
-  (message "gptel: tool confirmation %s"
-           (if gptel-confirm-tool-calls "on" "off"))) 
-
-)
+  (with-eval-after-load 'evil
+    (evil-define-key 'normal gptel-mode-map
+      (kbd "RET") #'gptel-send
+      (kbd "gm")  #'gptel-menu
+      (kbd "gr")  #'gptel-rewrite
+      (kbd "gb")  #'my/gptel-use-backend)
+    (evil-define-key 'visual gptel-mode-map
+      (kbd "RET") #'gptel-send)))
 #+end_src
 
+* Gptel-agent
+#+begin_src emacs-lisp
+(use-package gptel-agent
+  :ensure t
+  :after gptel
+  :config
+  (gptel-agent-update)
+  (advice-add 'gptel-agent :before #'my/gptel-ensure-project-memory))
+#+end_src
 
-* Ivy (Council)
-  Ivy, a generic completion mechanism for Emacs. Counsel, a collection of Ivy-enhanced versions of common Emacs commands.
+* Ivy/Counsel
+
+ Ivy, a generic completion mechanism for Emacs. Counsel, a collection of Ivy-enhanced versions of common Emacs commands.
   Ivy-rich allows us to add descriptions alongside the commands in M-x.
 #+begin_src emacs-lisp
 (use-package counsel
@@ -1209,16 +1569,6 @@ this is for flipping provider without touching anything else."
   (ivy-set-display-transformer 'ivy-switch-buffer
                                'ivy-rich-switch-buffer-transformer))
 
-#+end_src
-
-* Gptel-agent
-#+begin_src emacs-lisp
-(use-package gptel-agent
-  :ensure t
-  :after gptel
-  :config
-  (gptel-agent-update)
-  (advice-add 'gptel-agent :before #'my/gptel-ensure-project-memory))
 #+end_src
 
 

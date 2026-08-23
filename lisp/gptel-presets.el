@@ -46,6 +46,17 @@ failed to start."
     (error (message "gptel preset: MCP category %S not found" category) nil)))
 
 ;; ------------------------------------------------------------
+;; MODEL NOTE (2026-08-23)
+;; Opus was retired from this config in favour of Fable 5. Every model
+;; symbol below must also exist in `my/gptel-cborg-models' in init,
+;; otherwise it won't show in `gptel-menu' and gptel won't know its
+;; capabilities. Check with `M-x my/cborg-check-models' (C-c M-v).
+;;
+;; Reasoning effort is part of the CBorg model ID (-medium/-high/
+;; -xhigh/-ultra), not a request parameter.
+;; ------------------------------------------------------------
+
+;; ------------------------------------------------------------
 ;; 0  Free-basic
 ;; ------------------------------------------------------------
 (gptel-make-preset 'free-basic
@@ -60,13 +71,18 @@ failed to start."
 
 ;; ------------------------------------------------------------
 ;; Programmer – read code, list directories, inspect buffers
+;;
+;; Was claude-opus-4-8. Fable 5 at high effort replaces it.
+;; max-tokens raised to 16384: on a reasoning model the thinking tokens
+;; are drawn from this same budget, so 8192 risks truncating the answer
+;; after the model has spent most of the allowance thinking.
 ;; ------------------------------------------------------------
 (gptel-make-preset 'programmer
-  :description "Expert programming assistant with file & buffer access"
+r :description "Expert programming assistant with file & buffer access"
   :backend     "CBorg"
-  :model       'claude-opus-4-8
+  :model       'claude-fable-5-high
   :temperature nil
-  :max-tokens  8192
+  :max-tokens  16384
   :tools       (my/gptel-tools "read_file"
                                "list_directory"
                                "current_buffer"
@@ -81,6 +97,10 @@ and org_insert_src_block to add code under a heading.")
 
 ;; ------------------------------------------------------------
 ;; Vision
+;;
+;; NOTE: a preset of this name is also defined in the gptel use-package
+;; block. This file loads later, so this definition wins. Both point at
+;; cborg-vision so the collision is currently harmless — delete one.
 ;; ------------------------------------------------------------
 (gptel-make-preset 'vision
   :description "Image-capable assistant"
@@ -127,11 +147,16 @@ use analogies where helpful, keep jargon minimal, and provide concise code examp
 
 ;; ------------------------------------------------------------
 ;; Large-context
+;;
+;; Was google/grok-4.1-reasoning, which is still served but is no longer
+;; in the backend's :models list, and was never the long-context choice
+;; on this gateway anyway. Gemini Flash is: long window, cheap, fast.
+;; Swap to `gemini-3.1-pro' if you need reasoning quality over cost.
 ;; ------------------------------------------------------------
 (gptel-make-preset 'large-context
   :description "Huge-context summariser"
   :backend     "CBorg"
-  :model       'google/grok-4.1-reasoning
+  :model       'gemini-3.7-flash
   :temperature nil
   :max-tokens  8192
   :tools       (my/gptel-tools "read_file" "list_directory")
@@ -239,6 +264,10 @@ actionable."
 ;;
 ;; The three MCP memory *delete* tools are deliberately omitted: an
 ;; autonomous loop should not be able to wipe the knowledge graph.
+;;
+;; Model: claude-sonnet-high across all tiers. `claude-fable-5-high' is
+;; the upgrade path if Sonnet proves weak at long tool loops — left on
+;; Sonnet for now since agent loops burn tokens fast.
 ;; ------------------------------------------------------------
 ;; Tier 1: read-only. No mutation tools at all.
 (gptel-make-preset 'agent-ro

@@ -78,7 +78,7 @@ failed to start."
 ;; after the model has spent most of the allowance thinking.
 ;; ------------------------------------------------------------
 (gptel-make-preset 'programmer
-r :description "Expert programming assistant with file & buffer access"
+  :description "Expert programming assistant with file & buffer access"
   :backend     "CBorg"
   :model       'claude-fable-5-high
   :temperature nil

@@ -1462,10 +1462,21 @@ this is for flipping provider without touching anything else."
   ;; `my/gptel-header-line' was previously defined but never installed.
   ;; Disable gptel's own header so the two don't compete. To go back to
   ;; the stock header, delete this setq and the hook below.
-  (setq gptel-use-header-line nil)
-  (add-hook 'gptel-mode-hook
-            (lambda ()
-              (setq header-line-format '((:eval (my/gptel-header-line))))))
+  ;;(setq gptel-use-header-line nil)
+  ;;(add-hook 'gptel-mode-hook
+  ;;          (lambda ()
+  ;;            (setq header-line-format '((:eval (my/gptel-header-line))))))
+
+  ;; Keep gptel's header line so gptel-agent can install its [Agent]/[Plan]
+  ;; toggle into element 0; swap only the info segment (element 2) for ours.
+  (defun my/gptel-header-line-setup ()
+    (when (consp header-line-format)
+      (setf (nth 2 header-line-format) '(:eval (my/gptel-header-line)))))
+
+  (with-eval-after-load 'gptel
+    (advice-add 'gptel-use-header-line :after #'my/gptel-header-line-setup))
+
+
 
   ;; ----------------------------------------------------------------
   ;; Gptel custom functions for custom config files and tools saved elsewhere

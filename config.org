@@ -1703,6 +1703,14 @@ Emacs helper package to make Emacs aware of a virtual enviroment. Once Emacs kno
       . (:command "npx"
 	  :args    ("-y" "mcp-searxng")
 	  :env     (:SEARXNG_URL "http://localhost:8888")))
+     ;; CBORG's authenticated remote MCP gateway.  `mcp.el' resolves the
+     ;; token function when it sends a request, so the key is never copied
+     ;; into this file.  The connection name "cborg" is local to Emacs;
+     ;; tool names are discovered from the gateway during initialization.
+     ("tavily"
+      . (:url     "https://api.cborg.lbl.gov/mcp/tavily"
+         :token   ,my/gptel-cborg-key
+         :timeout 120)) 
      ;; Fetch is a lightweight headless server that reads webpage data and returns json
      ;; Every machine needs to have uv installed: curl -LsSf https://astral.sh/uv/install.sh | sh
      ("fetch"

@@ -69,6 +69,7 @@
 - [[#tldr][TL;DR]]
 - [[#transparency][Transparency]]
 - [[#which-key][WHICH-KEY]]
+- [[#winum][Winum]]
 - [[#custom-functions][Custom Functions]]
 
 * IMPORTANT PROGRAMS TO LOAD FIRST
@@ -2408,6 +2409,30 @@ With Emacs version 29, true transparency has been added.  I have turned transpar
 	  which-key-separator " → " ))
 
 #+end_src
+
+* Winum
+Winum is a package that allows you to jump between numbered windows in an emacs frame using Meta-1 (M-1 through M-9) for instant window jumping
+#+begin_src emacs-lisp
+(use-package winum
+  :ensure t
+  :init
+  ;; This ensures M-1 through M-9 are bound to winum window switching
+  (setq winum-keymap
+        (let ((map (make-sparse-keymap)))
+          (define-key map (kbd "M-1") 'winum-select-window-1)
+          (define-key map (kbd "M-2") 'winum-select-window-2)
+          (define-key map (kbd "M-3") 'winum-select-window-3)
+          (define-key map (kbd "M-4") 'winum-select-window-4)
+          (define-key map (kbd "M-5") 'winum-select-window-5)
+          (define-key map (kbd "M-6") 'winum-select-window-6)
+          (define-key map (kbd "M-7") 'winum-select-window-7)
+          (define-key map (kbd "M-8") 'winum-select-window-8)
+          (define-key map (kbd "M-9") 'winum-select-window-9)
+          map))
+  :config
+  (winum-mode 1))
+#+end_src
+
 
 * Custom Functions
 #+begin_src emacs-lisp

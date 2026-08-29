@@ -63,7 +63,7 @@
 - [[#shells-and-terminals][Shells and Terminals]]
   - [[#eshell][Eshell]]
   - [[#vterm][Vterm]]
-  - [[#vterm-toggle][Vterm-Toggle]]
+  - [[#vterm-toggle][vterm-toggle]]
 - [[#sudo-edit][SUDO Edit]]
 - [[#theme][THEME]]
 - [[#tldr][TL;DR]]
@@ -2242,97 +2242,111 @@ In my configs, all of my shells (bash, fish, zsh and the ESHELL) require my shel
 #+end_src
 
 ** Vterm
-Vterm is a terminal emulator within Emacs.  The ‘shell-file-name’ setting sets the shell to be used in M-x shell, M-x term, M-x ansi-term and M-x vterm.  By default, the shell is set to 'zsh’ but could change it to ‘fish’ or ‘zsh’ if you prefer.
+vterm is a terminal emulator within emacs.  the ‘shell-file-name’ setting sets the shell to be used in m-x shell, m-x term, m-x ansi-term and m-x vterm.  by default, the shell is set to 'zsh’ but could change it to ‘fish’ or ‘zsh’ if you prefer.
 #+begin_src emacs-lisp
-  (use-package vterm
-    :ensure t
-    :config
-    ;; -------------------------------
-    ;; Basic shell settings
-    ;; -------------------------------
-    ;; Set default shell to zsh if available, otherwise bash
-    (setq shell-file-name (if (file-exists-p "/bin/zsh")
-                            "/bin/zsh"
-                          "/bin/bash"))
-    ;; Use zsh in vterm if available, otherwise bash
-    (setq vterm-shell (if (file-exists-p "/bin/zsh")
-                        "/bin/zsh"
-                      "/bin/bash")) ;; Set default shell to zsh
-    ;;(setq shell-file-name "/bin/zsh")
-    ;; Use zsh in vterm
-    ;;(setq vterm-shell "/bin/zsh")
-    ;; Increase scrollback buffer
-    (setq vterm-max-scrollback 5000)
-    ;; Ensure terminal type is correct
-    (setq vterm-term-environment-variable "xterm-256color")
 
-    ;; -------------------------------
-    ;; Arrow keys & Evil mode fix
-    ;; -------------------------------
-    (add-hook 'vterm-mode-hook
-              (lambda ()
-                ;; Always enter insert state
-                (when (fboundp 'evil-insert-state)
-                  (evil-insert-state))
-                ;; Let all keys pass to the terminal
-                (setq-local vterm-keymap-exceptions nil)
-                ;; Optional: improve scrolling in terminal
-                (setq-local term-scroll-show-maximum-output t)))
+(defgroup my/layout nil
+  "Multi-monitor frame layout."
+  :group 'frames)
 
-    ;; -------------------------------
-    ;; History navigation (backup)
-    ;; -------------------------------
-    (define-key vterm-mode-map (kbd "M-p") #'vterm-send-up)
-    (define-key vterm-mode-map (kbd "M-n") #'vterm-send-down)
+(defcustom my/layout-portrait-top-buffer "*portrait-top*"
+  "Buffer shown in the top window of the portrait frame on a fresh build.
+Only used when the window has nothing meaningful in it already."
+  :type 'string
+  :group 'my/layout)
 
-    ;; -------------------------------
-    ;; Optional: sudo helper
-    ;; -------------------------------
-    (defun my/vterm-sudo ()
-      "Open a vterm buffer with sudo privileges."
-      (interactive)
-      (let ((vterm-buffer-name "*vterm-sudo*"))
-        (vterm)
-        (vterm-send-string "sudo -i")
-        (vterm-send-return)))
 
-    ;; -------------------------------
-    ;; Optional: copy/paste bindings
-    ;; -------------------------------
-   ;; (with-eval-after-load 'vterm
-   ;;   (define-key vterm-mode-map (kbd "C-c C-c") #'vterm-copy-mode)
-   ;;   (define-key vterm-mode-map (kbd "C-c C-v") #'vterm-yank))
-    )
+(defcustom my/layout-gptel-buffer-prefix "*gptel-agent"
+  "Prefix of the buffer names created by `gptel-agent'."
+  :type 'string
+  :group 'my/layout)
 
+(defvar my/layout--gptel-buffer nil
+  "The agent buffer belonging to the layout, once created.")
+
+(use-package vterm
+  :ensure t
+  :config
+  ;; -------------------------------
+  ;; basic shell settings
+  ;; -------------------------------
+  (setq shell-file-name (or (executable-find "zsh")
+                            (executable-find "bash")
+                            "/bin/sh"))
+  (setq vterm-shell shell-file-name)
+  (setq vterm-max-scrollback 5000)
+  (setq vterm-term-environment-variable "xterm-256color")
+
+  ;; -------------------------------
+  ;; per-buffer setup
+  ;; -------------------------------
+  (defun my/vterm-setup ()
+    "Buffer-local tweaks for vterm buffers.
+Insert state is handled by `evil-insert-state-modes' elsewhere."
+    ;; Let the terminal see M-1..M-9 instead of winum stealing them.
+    ;; Delete this form if you would rather keep winum jumping in vterm.
+    (when (boundp 'winum-mode)
+      (setq-local winum-mode nil)))
+  (add-hook 'vterm-mode-hook #'my/vterm-setup)
+
+  ;; -------------------------------
+  ;; history navigation (backup)
+  ;; -------------------------------
+  (define-key vterm-mode-map (kbd "M-p") #'vterm-send-up)
+  (define-key vterm-mode-map (kbd "M-n") #'vterm-send-down)
+
+  ;; -------------------------------
+  ;; optional: sudo helper
+  ;; -------------------------------
+  (defun my/vterm-sudo ()
+    "Open a vterm buffer with sudo privileges."
+    (interactive)
+    (let ((buf (get-buffer "*vterm-sudo*")))
+      (if (buffer-live-p buf)
+          (pop-to-buffer buf)
+        (let ((vterm-buffer-name "*vterm-sudo*"))
+          (vterm)
+          (vterm-send-string "sudo -i")
+          (vterm-send-return)))))
+
+  ;; -------------------------------
+  ;; optional: copy/paste bindings
+  ;; -------------------------------
+  ;; (define-key vterm-mode-map (kbd "C-c C-c") #'vterm-copy-mode)
+  ;; (define-key vterm-mode-map (kbd "C-c C-v") #'vterm-yank)
+  )
 #+end_src
 
 
-** Vterm-Toggle
-[[https://github.com/jixiuf/vterm-toggle][Vterm-toggle]] toggles between the vterm buffer and whatever buffer you are editing.
+** vterm-toggle
+[[https://github.com/jixiuf/vterm-toggle][vterm-toggle]] toggles between the vterm buffer and whatever buffer you are editing.
 #+begin_src emacs-lisp
 (use-package vterm-toggle
   :ensure t
   :after vterm
   :config
-  ;; When running programs in Vterm and in 'normal' mode, make sure that ESC
-  ;; kills the program as it would in most standard terminal programs.
-  (evil-define-key 'normal vterm-mode-map (kbd "<escape>") 'vterm--self-insert)
+  (with-eval-after-load 'evil
+    (evil-define-key 'normal vterm-mode-map
+      (kbd "<escape>") 'vterm--self-insert))
+
   (setq vterm-toggle-fullscreen-p nil)
   (setq vterm-toggle-scope 'project)
+  (when (boundp 'vterm-toggle-hide-method)
+    (setq vterm-toggle-hide-method 'reset-window-configration))
+
   (add-to-list 'display-buffer-alist
                '((lambda (buffer-or-name _)
-                     (let ((buffer (get-buffer buffer-or-name)))
-                       (with-current-buffer buffer
-                         (or (equal major-mode 'vterm-mode)
-                             (string-prefix-p vterm-buffer-name (buffer-name buffer))))))
-                  (display-buffer-reuse-window display-buffer-at-bottom)
-                  ;;(display-buffer-reuse-window display-buffer-in-direction)
-                  ;;display-buffer-in-direction/direction/dedicated is added in emacs27
-                  ;;(direction . bottom)
-                  ;;(dedicated . t) ;dedicated is supported in emacs27
-                  (reusable-frames . visible)
-                  (window-height . 0.4))))
-
+                   (let ((buffer (get-buffer buffer-or-name)))
+                     (with-current-buffer buffer
+                       (or (equal major-mode 'vterm-mode)
+                           (string-prefix-p vterm-buffer-name
+                                            (buffer-name buffer))))))
+                 (display-buffer-reuse-window display-buffer-at-bottom)
+                 (reusable-frames . nil)
+                 (inhibit-same-window . t)
+                 (window-height . 0.33)
+                 (preserve-size . (nil . t))))
+  )
 #+end_src
 
 * SUDO Edit
@@ -2405,7 +2419,6 @@ With Emacs version 29, true transparency has been added.  I have turned transpar
 	  which-key-side-window-max-height 0.25
 	  which-key-idle-delay 0.8
 	  which-key-max-description-length 25
-	  which-key-allow-imprecise-window-fit nil
 	  which-key-separator " → " ))
 
 #+end_src
@@ -2416,26 +2429,23 @@ Winum is a package that allows you to jump between numbered windows in an emacs 
 (use-package winum
   :ensure t
   :init
-  ;; This ensures M-1 through M-9 are bound to winum window switching
   (setq winum-keymap
         (let ((map (make-sparse-keymap)))
-          (define-key map (kbd "M-1") 'winum-select-window-1)
-          (define-key map (kbd "M-2") 'winum-select-window-2)
-          (define-key map (kbd "M-3") 'winum-select-window-3)
-          (define-key map (kbd "M-4") 'winum-select-window-4)
-          (define-key map (kbd "M-5") 'winum-select-window-5)
-          (define-key map (kbd "M-6") 'winum-select-window-6)
-          (define-key map (kbd "M-7") 'winum-select-window-7)
-          (define-key map (kbd "M-8") 'winum-select-window-8)
-          (define-key map (kbd "M-9") 'winum-select-window-9)
+          (define-key map (kbd "C-x W") #'winum-select-window-by-number)
+          (define-key map (kbd "M-0") #'winum-select-window-0-or-10)
+          (dotimes (i 9)
+            (define-key map (kbd (format "M-%d" (1+ i)))
+                        (intern (format "winum-select-window-%d" (1+ i)))))
           map))
   :config
+  (setq winum-scope 'visible
+        winum-auto-assign-0-to-minibuffer t)
   (winum-mode 1))
 #+end_src
 
 
 * Custom Functions
-#+begin_src emacs-lisp
+#+begin_src emacs-lisp :tangle no
 ;; One-off helper: append the wegwil webserver entity to the global MCP
 ;; memory store. The server-memory backend uses JSON Lines (one JSON
 ;; object per line), with entities tagged "type":"entity".
@@ -2463,37 +2473,33 @@ Winum is a package that allows you to jump between numbered windows in an emacs 
 #+begin_src emacs-lisp
 ;; --- Custom functions ---
 (defun my/org-inline-paste ()
-  "Paste latest kill-ring inline in Org."
+  "Paste latest kill-ring entry at point in Org, without newline handling."
   (interactive)
   (insert (current-kill 0)))
 
 ;; --- Evil + Org keybindings ---
 (with-eval-after-load 'evil
   (evil-define-key 'normal org-mode-map
-    (kbd "p") #'my/org-inline-paste         ;; Now p   is paste BEFORE point
-    (kbd "C-p") #'evil-paste-after))        ;; Now C-p is paste AFTER point
-
+    (kbd "p") #'my/org-inline-paste     ;; insert the kill AT point, inline
+    (kbd "C-p") #'evil-paste-after))    ;; the normal vim `p' behaviour
 
 #+end_src
 
 #+begin_src emacs-lisp
 ;;This function automatically makes shell scripts executable when you save them if they sart with #1/bin/bash
 ;;Whenever a file is saved with #! (shebang), Emacs will automatically make it executable
+;; Make a script executable on save if it starts with a shebang.
 (defun my/make-shell-script-executable ()
   "Make a shell script executable if it starts with a shebang."
   (when (and buffer-file-name
-             ;; Ensure the file really starts with shebang
              (save-excursion
                (goto-char (point-min))
                (looking-at-p "^#!"))
-             ;; Ensure the file ends with Unix line endings
-             (not (eq buffer-file-coding-system 'unix)))
+             (not (file-executable-p buffer-file-name)))
     (set-file-modes buffer-file-name #o755)
     (message "✅ Made %s executable" buffer-file-name)))
 
-;; Add the hook after save
 (add-hook 'after-save-hook #'my/make-shell-script-executable)
-
 #+end_src
 
 #+begin_src emacs-lisp
@@ -2502,13 +2508,13 @@ Winum is a package that allows you to jump between numbered windows in an emacs 
     (add-to-list 'evil-insert-state-modes 'vterm-mode)
     (add-to-list 'evil-insert-state-modes 'term-mode))
 
-  (defun my/evil-insert-in-term ()
-    "Force insert mode in terminal buffers."
-    (when (derived-mode-p 'vterm-mode 'term-mode)
-      (evil-insert-state)))
+ ;; (defun my/evil-insert-in-term ()
+ ;;   "Force insert mode in terminal buffers."
+ ;;   (when (derived-mode-p 'vterm-mode 'term-mode)
+ ;;     (evil-insert-state)))
 
-  (add-hook 'vterm-mode-hook #'my/evil-insert-in-term)
-  (add-hook 'term-mode-hook #'my/evil-insert-in-term)
+ ;; (add-hook 'vterm-mode-hook #'my/evil-insert-in-term)
+ ;; (add-hook 'term-mode-hook #'my/evil-insert-in-term)
 
   ;; Optional: set default shell for vterm
   ;; (setq vterm-shell "/bin/bash")
@@ -2618,7 +2624,249 @@ Full regeneration: overwrites FILE with the agent's rendered plan."
 
 #+end_src
 
+#+begin_src emacs-lisp
+(require 'seq)
 
+;;;; Monitor discovery
+
+(defun my/layout--area (monitor)
+  "Usable pixel area (X Y W H) of MONITOR."
+  (or (alist-get 'workarea monitor)
+      (alist-get 'geometry monitor)))
+
+(defun my/layout--portrait-monitor ()
+  "First monitor taller than it is wide, or nil."
+  (seq-find (lambda (m)
+              (pcase-let ((`(,_ ,_ ,w ,h) (my/layout--area m)))
+                (> h w)))
+            (display-monitor-attributes-list)))
+
+(defun my/layout--landscape-monitor ()
+  "Widest monitor that is wider than it is tall, or nil."
+  (car (sort (seq-filter (lambda (m)
+                           (pcase-let ((`(,_ ,_ ,w ,h) (my/layout--area m)))
+                             (>= w h)))
+                         (display-monitor-attributes-list))
+             (lambda (a b) (> (nth 2 (my/layout--area a))
+                              (nth 2 (my/layout--area b)))))))
+
+(defun my/layout--coord (n)
+  "Frame-parameter position spec for absolute pixel coordinate N.
+Bare negative integers mean \"offset from the far edge\", so a genuinely
+negative absolute coordinate must use the (+ N) list form."
+  (if (< n 0) (list '+ n) n))
+
+(defun my/layout--display-of (frame)
+  "Return the display name FRAME lives on, or nil."
+  (frame-parameter frame 'display))
+
+
+;;;; Frame and window lookup
+
+(defun my/layout-window (buffer &optional frame)
+  "Return a live window showing BUFFER, or nil.
+BUFFER is a buffer or a buffer name.  FRAME limits the search to that
+frame; otherwise all visible frames are searched."
+  (when-let ((buf (get-buffer buffer)))
+    (get-buffer-window buf (or frame 'visible))))
+
+(defun my/layout-frame (role)
+  "Return the live frame tagged with ROLE, or nil."
+  (or (seq-find (lambda (f)
+                  (and (frame-live-p f)
+                       (eq (frame-parameter f 'my/layout-role) role)))
+                (frame-list))
+      (and (eq role 'portrait)
+           (when-let* ((b (my/layout-gptel-buffer))
+                       (w (my/layout-window b)))
+             (window-frame w)))))
+
+(defun my/layout--place (frame monitor)
+  "Move FRAME onto MONITOR and maximize it there."
+  (when (and (frame-live-p frame) monitor)
+    (pcase-let ((`(,x ,y ,_ ,_) (my/layout--area monitor)))
+      (set-frame-parameter frame 'fullscreen nil)
+      (redisplay t)
+      (modify-frame-parameters frame
+                               `((left . ,(my/layout--coord x))
+                                 (top  . ,(my/layout--coord y))))
+      (redisplay t)
+      (set-frame-parameter frame 'fullscreen 'maximized))))
+
+;;;; Buffer setup
+
+(defun my/layout--build-portrait-windows (frame)
+  "Split FRAME into a general-purpose window above, gptel below.
+An existing non-agent buffer in the frame is kept in the top window."
+  (with-selected-frame frame
+    (let* ((keep (seq-find (lambda (b)
+                             (not (eq b (my/layout-gptel-buffer))))
+                           (mapcar #'window-buffer (window-list frame 'no-mini))))
+           (top-buffer (or keep
+                           (get-buffer-create my/layout-portrait-top-buffer))))
+      (delete-other-windows)
+      (let ((bottom (split-window-below)))
+        (switch-to-buffer top-buffer)
+        (with-selected-window bottom
+          (my/layout--show-gptel))))))
+
+(defun my/layout--windows-ok-p (frame)
+  "Non-nil if FRAME is split in two with the agent in the lower window."
+  (let ((windows (window-list frame 'no-mini))
+        (agent (my/layout-gptel-buffer)))
+    (and (= (length windows) 2)
+         (buffer-live-p agent)
+         (when-let ((w (my/layout-window agent frame)))
+           (> (window-top-line w) 0)))))
+
+(defun my/layout--agent-buffers ()
+  "All live gptel-agent session buffers."
+  (seq-filter (lambda (b)
+                (string-prefix-p "*gptel-agent:" (buffer-name b)))
+              (buffer-list)))
+
+(defun my/layout-gptel-buffer ()
+  "Return the layout's agent buffer, or nil."
+  (if (buffer-live-p my/layout--gptel-buffer)
+      my/layout--gptel-buffer
+    (let ((candidates (my/layout--agent-buffers)))
+      (setq my/layout--gptel-buffer
+            (when (= (length candidates) 1) (car candidates))))))
+
+(defun my/layout--show-gptel ()
+  "Display the gptel agent in the selected window, reusing it if alive."
+  (let ((buf (my/layout-gptel-buffer)))
+    (if (buffer-live-p buf)
+        (switch-to-buffer buf)
+      (let* ((before (my/layout--agent-buffers))
+             (display-buffer-overriding-action '((display-buffer-same-window))))
+        (call-interactively #'gptel-agent)
+        (let ((new (seq-find (lambda (b) (not (memq b before)))
+                             (my/layout--agent-buffers))))
+          (cond
+           (new (setq my/layout--gptel-buffer new)
+                (switch-to-buffer new))
+           ;; Command reused an existing session rather than making one.
+           ((my/layout--agent-buffers)
+            (setq my/layout--gptel-buffer (car (my/layout--agent-buffers)))
+            (switch-to-buffer my/layout--gptel-buffer))
+           (t (message "my/layout: gptel-agent produced no session buffer"))))))))
+
+;;;; Commands
+
+(defvar my/layout--busy nil
+  "Non-nil while the layout is being applied, to suppress reentry.")
+
+(defun my/layout-apply (&optional rebuild)
+  "Place the layout frames on their monitors.
+
+With prefix argument REBUILD, also reset the window splits and buffers.
+Without it, only frame geometry is corrected, and windows that are
+already arranged correctly are left alone."
+  (interactive "P")
+  (unless (display-graphic-p)
+    (user-error "No graphical display"))
+  (let ((my/layout--busy t)
+        (portrait-mon (my/layout--portrait-monitor))
+        (landscape-mon (my/layout--landscape-monitor)))
+
+    ;; Main frame.
+    (let ((main (or (my/layout-frame 'main) (selected-frame))))
+      (set-frame-parameter main 'my/layout-role 'main)
+      (if landscape-mon
+          (my/layout--place main landscape-mon)
+        (set-frame-parameter main 'fullscreen 'maximized))
+      (when rebuild
+        (with-selected-frame main
+          (delete-other-windows)
+          (split-window-right))))
+
+    ;; Portrait frame.
+    (if (not portrait-mon)
+        (message "my/layout: no portrait monitor detected")
+      (let ((frame (my/layout-frame 'portrait))
+            (fresh nil))
+        (unless frame
+          (setq fresh t
+                frame (make-frame
+                       `((name . "Portrait Display")
+                         (my/layout-role . portrait)
+                          (display . ,(my/layout--display-of (selected-frame)))
+                         (width . 80) (height . 50)))))
+        (my/layout--place frame portrait-mon)
+        (when (or fresh rebuild (not (my/layout--windows-ok-p frame)))
+          (my/layout--build-portrait-windows frame))))
+    (message "my/layout: %s" (if rebuild "rebuilt" "repositioned"))))
+
+(defun my/layout-teardown ()
+  "Delete the portrait frame without killing its buffers."
+  (interactive)
+  (when-let ((f (my/layout-frame 'portrait)))
+    (delete-frame f)))
+
+;;;; Startup and hotplug
+
+(defvar my/layout--started nil
+  "Non-nil once the layout has been built in this session.")
+
+(defun my/layout-startup ()
+  "Build the layout once, as soon as a graphical frame exists.
+Deferred, because in daemon mode this runs before the client frame is
+fully realised."
+  (when (and (not my/layout--started)
+             (display-graphic-p))
+    (setq my/layout--started t)
+    (let ((frame (selected-frame)))
+      (run-at-time
+       0.5 nil
+       (lambda ()
+         (if (not (frame-live-p frame))
+             ;; Client vanished before we ran; allow a later attempt.
+             (setq my/layout--started nil)
+           (with-selected-frame frame
+             (condition-case err
+                 (my/layout-apply t)
+               (error
+                (setq my/layout--started nil)
+                (message "my/layout: %S" err))))))))))
+
+(add-hook 'emacs-startup-hook #'my/layout-startup)
+(add-hook 'server-after-make-frame-hook #'my/layout-startup)
+
+
+(defvar my/layout--timer nil)
+
+(defun my/layout--monitors-changed (&rest _)
+  "Debounced reaction to a monitor hotplug."
+  (unless my/layout--busy
+    (when (timerp my/layout--timer) (cancel-timer my/layout--timer))
+    (setq my/layout--timer
+          (run-with-idle-timer
+           1.5 nil (lambda ()
+                     (with-demoted-errors "my/layout: %S"
+                       (my/layout-apply nil)))))))
+
+(when (boundp 'display-monitors-changed-functions)
+  (add-hook 'display-monitors-changed-functions #'my/layout--monitors-changed))
+
+(keymap-global-set "C-c w" #'my/layout-apply)
+
+(defun my/layout-goto (buffer-name)
+  "Focus the window showing BUFFER-NAME, raising its frame."
+  (when-let ((w (my/layout-window buffer-name)))
+    (select-frame-set-input-focus (window-frame w))
+    (select-window w)))
+
+(defun my/layout-goto-gptel ()
+  "Focus the layout gptel agent."
+  (interactive)
+  (if-let ((b (my/layout-gptel-buffer)))
+      (my/layout-goto b)
+    (user-error "No agent buffer")))
+
+(keymap-global-set "C-c g" #'my/layout-goto-gptel)
+
+#+end_src
 
 
 

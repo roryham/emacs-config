@@ -1922,6 +1922,92 @@ Neotree is a file tree viewer.  When you open neotree, it jumps to the current f
                  (make-local-variable 'auto-hscroll-mode)
                  (setq auto-hscroll-mode nil)))))
 
+;;; NeoTree: open files in a sensible target window ------------------------
+
+(require 'seq)
+
+(defvar neo-window-position)            ; silence byte-compiler
+(declare-function neo-buffer--get-filename-current-line "neotree")
+(declare-function neotree-enter "neotree")
+(declare-function winum-get-number "winum")
+(declare-function winum-get-window-by-number "winum")
+
+(defun neotree--window-p (win)
+  "Non-nil if WIN displays a NeoTree buffer."
+  (with-current-buffer (window-buffer win)
+    (derived-mode-p 'neotree-mode)))
+
+(defun neotree--sibling-window ()
+  "Return the editing window adjacent to NeoTree.
+Prefers the window on the side the tree opens toward; falls back to the
+first ordinary window on the frame.  Returns nil if there is none."
+  (let* ((neo-win (selected-window))
+         (dir (if (eq neo-window-position 'right) 'left 'right))
+         (adjacent (window-in-direction dir neo-win)))
+    (or (and (window-live-p adjacent)
+             (not (neotree--window-p adjacent))
+             adjacent)
+        (seq-find (lambda (w)
+                    (and (not (eq w neo-win))
+                         (not (neotree--window-p w))
+                         (not (window-parameter w 'window-side))))
+                  (window-list nil nil (frame-first-window))))))
+
+(defun neotree--make-target-window ()
+  "Create and return a window to the right of the frame's main area."
+  (let ((main (if (fboundp 'window-main-window)
+                  (window-main-window)
+                (frame-root-window))))
+    (split-window main nil 'right)))
+
+(defun neotree-enter-or-click-in-winum (&optional arg event)
+  "Open the NeoTree file at point in another window.
+With no prefix ARG, use the window adjacent to NeoTree, creating one if
+none exists.  With a numeric prefix, use that winum window.  With
+`C-u', prompt for a window number.  EVENT is the mouse event when
+invoked by clicking.  Directories fall through to `neotree-enter'."
+  (interactive (list current-prefix-arg last-nonmenu-event))
+  (when (mouse-event-p event)
+    (mouse-set-point event))
+  (let ((file (neo-buffer--get-filename-current-line)))
+    (if (not (and file (not (file-directory-p file))))
+        (neotree-enter)
+      (let* ((sibling (neotree--sibling-window))
+             (default (and sibling (winum-get-number sibling)))
+             (num (cond ((integerp arg) arg)
+                        ((consp arg) (read-number "Window number: " default))
+                        (t default)))
+             (win (cond ((and (integerp num) (> num 0))
+                         (winum-get-window-by-number num))
+                        (t sibling))))
+        (cond
+         ((and (integerp num) (null win))
+          (message "Window %d does not exist!" num))
+         ((eq win (selected-window))
+          (message "That's the NeoTree window itself!"))
+         (t
+          (let ((created (null win)))
+            (select-window (or win (neotree--make-target-window)))
+            (find-file file)
+            (when created
+              (balance-windows)))))))))
+
+(with-eval-after-load 'neotree
+  (require 'winum)
+  (define-key neotree-mode-map (kbd "RET") #'neotree-enter-or-click-in-winum)
+  (define-key neotree-mode-map [mouse-1] #'neotree-enter-or-click-in-winum))
+
+(with-eval-after-load 'neotree
+  (require 'winum)
+  (define-key neotree-mode-map (kbd "RET")      #'neotree-enter-or-click-in-winum)
+  (define-key neotree-mode-map (kbd "<return>") #'neotree-enter-or-click-in-winum)
+  (define-key neotree-mode-map [mouse-1]        #'neotree-enter-or-click-in-winum)
+  (with-eval-after-load 'evil
+    (evil-define-key 'normal neotree-mode-map
+      (kbd "RET")      #'neotree-enter-or-click-in-winum
+      (kbd "<return>") #'neotree-enter-or-click-in-winum
+      [mouse-1]        #'neotree-enter-or-click-in-winum)))
+
 #+end_src
 
 * Nerd icons

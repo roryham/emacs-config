@@ -2515,18 +2515,20 @@ Winum is a package that allows you to jump between numbered windows in an emacs 
 (use-package winum
   :ensure t
   :init
+  (setq winum-scope 'visible
+        winum-auto-assign-0-to-minibuffer t)
   (setq winum-keymap
         (let ((map (make-sparse-keymap)))
           (define-key map (kbd "C-x W") #'winum-select-window-by-number)
           (define-key map (kbd "M-0") #'winum-select-window-0-or-10)
           (dotimes (i 9)
             (define-key map (kbd (format "M-%d" (1+ i)))
-                        (intern (format "winum-select-window-%d" (1+ i)))))
+              (intern (format "winum-select-window-%d" (1+ i)))))
           map))
   :config
-  (setq winum-scope 'visible
-        winum-auto-assign-0-to-minibuffer t)
-  (winum-mode 1))
+  (winum-mode 1)
+  (let ((cell (assq 'winum-mode minor-mode-map-alist)))
+    (when cell (setcdr cell winum-keymap))))
 #+end_src
 
 
